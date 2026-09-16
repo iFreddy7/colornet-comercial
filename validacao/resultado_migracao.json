@@ -1,0 +1,34 @@
+{
+  "node_testado": "v24.19.0",
+  "cenarios": [
+    {
+      "cenario": "Variáveis ausentes impedem publicar tela sem configuração",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "Chave secreta não pode entrar no frontend",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "Chave legada service_role é rejeitada",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "URL sem HTTPS é rejeitada no build",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "Nome inválido de ambiente é rejeitado",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "Build de homologação aceita configuração legada anon",
+      "resultado": "aprovado"
+    },
+    {
+      "cenario": "Compilação TypeScript e Vite para produção",
+      "resultado": "aprovado"
+    }
+  ],
+  "limite": "Build com valores fictícios; login, dados e e-mails no novo endereço dependem da publicação com as configurações reais."
+}

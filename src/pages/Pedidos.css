@@ -1,0 +1,130 @@
+/* Estilos desta tela acompanham Pedidos.tsx, inclusive em projetos com CSS antigo. */
+.orders-page .order-summary-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+}
+
+.orders-page .order-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px 12px 0;
+}
+
+.orders-page .order-action-buttons > button {
+  min-height: 44px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.orders-page .danger-button {
+  border: 1px solid #e8a4a4;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fff3f3;
+  color: #a12f2f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.orders-page .danger-button:hover:not(:disabled) {
+  background: #ffe8e8;
+}
+
+.orders-page .danger-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.orders-page .badge.danger {
+  background: #fde7e7;
+  color: #a12f2f;
+}
+
+.orders-page .order-card-cancelled {
+  opacity: .82;
+}
+
+.orders-page .cancelled-order-note,
+.orders-page .cancel-order-panel {
+  margin: 0 16px 14px;
+  border: 1px solid #efc4c4;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fffafa;
+}
+
+.orders-page .cancelled-order-note strong,
+.orders-page .cancelled-order-note span {
+  display: block;
+}
+
+.orders-page .cancelled-order-note strong,
+.orders-page .cancel-order-panel > div:first-child strong {
+  color: #812b2b;
+}
+
+.orders-page .cancelled-order-note span,
+.orders-page .cancelled-order-note p,
+.orders-page .cancel-order-panel > div:first-child p {
+  color: #76676c;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.orders-page .cancel-order-panel label {
+  display: block;
+  color: #514750;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.orders-page .cancel-order-panel textarea {
+  width: 100%;
+  margin-top: 6px;
+  resize: vertical;
+  font: inherit;
+}
+
+.orders-page .cancel-order-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .orders-page .order-summary-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .orders-page .order-action-buttons {
+    padding: 0 14px 14px;
+  }
+
+  .orders-page .order-open-button {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .orders-page .order-action-buttons > button {
+    flex: 1 1 130px;
+    width: auto;
+  }
+
+  .orders-page .cancel-order-actions {
+    flex-direction: column-reverse;
+  }
+
+  .orders-page .cancel-order-actions > button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
