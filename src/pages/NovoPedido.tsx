@@ -144,12 +144,16 @@ export function NovoPedido({
   onPedidoCriado,
   pedidoDuplicarId,
   onDuplicacaoCarregada,
+  cotacao = false,
 }: {
+  cotacao?: boolean
   usuario: UsuarioApp
   onPedidoCriado: () => void
   pedidoDuplicarId?: string | null
   onDuplicacaoCarregada?: () => void
 }) {
+  const [titulo, setTitulo] = useState('')
+  const envioRef = useRef(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [filiais, setFiliais] = useState<Filial[]>([])
   const [prazos, setPrazos] = useState<OpcaoCadastro[]>([])
@@ -762,7 +766,8 @@ export function NovoPedido({
   }, [itens])
 
   async function salvarPedido() {
-    if (salvando) return
+    if (salvando || envioRef.current) return
+    if (cotacao && !titulo.trim()) { setErro('Informe o título da cotação/lista de preço.'); return }
     setErro('')
     setSucesso('')
     setAvisoEmail('')
@@ -777,9 +782,11 @@ export function NovoPedido({
       return
     }
 
+    envioRef.current = true
     setSalvando(true)
 
     const cabecalho = {
+      titulo: titulo.trim(),
       cliente_id: clienteId,
       filial_id: filialId,
       moeda,
@@ -802,15 +809,25 @@ export function NovoPedido({
       faixa_interna: item.faixa_interna,
     }))
 
-    const { data, error } = await supabase.rpc('criar_pedido_v4', {
+    const { data, error } = await supabase.rpc(cotacao ? 'criar_cotacao' : 'criar_pedido_v4', {
       p_cabecalho: cabecalho,
       p_itens: payloadItens,
       p_idempotency_key: idempotencyKey,
-    })
+    }).then(r => r, () => ({ data: null, error: { message: 'Falha de conexão. Tente novamente; o envio não será duplicado.' } }))
 
     if (error) {
+      envioRef.current = false
       setSalvando(false)
       setErro(error.message)
+      return
+    }
+
+    if (cotacao) {
+      envioRef.current = false
+      setSalvando(false)
+      setSucesso(`${data.numero} salva. Acesse Cotações / Listas para baixar o PDF.`)
+      setItens([]); setTitulo(''); setObservacoes(''); setIdempotencyKey(crypto.randomUUID())
+      onPedidoCriado()
       return
     }
 
@@ -856,6 +873,7 @@ export function NovoPedido({
       }
     }
 
+    envioRef.current = false
     setSalvando(false)
 
     setItens([])
@@ -886,8 +904,8 @@ export function NovoPedido({
     <section className="page">
       <div className="page-header">
         <div>
-          <span className="eyebrow">NOVO PEDIDO • {APP_ENV_LABEL}</span>
-          <h1>Novo Pedido</h1>
+          <span className="eyebrow">{cotacao ? 'NOVA COTAÇÃO' : 'NOVO PEDIDO'} • {APP_ENV_LABEL}</span>
+          <h1>{cotacao ? 'Nova Cotação / Lista de Preço' : 'Novo Pedido'}</h1>
           <p>
             Cliente é filtrado pelo banco. O cálculo fiscal e a gravação final
             são novamente validados no PostgreSQL.
@@ -909,15 +927,17 @@ export function NovoPedido({
           <span>1</span>
           <div>
             <strong>Dados comerciais</strong>
-            <small>Cliente, faturamento e entrega.</small>
+            <small>{cotacao ? 'Título, cliente, filial e moeda. Para trocar cliente, filial ou moeda, remova os itens primeiro.' : 'Cliente, faturamento e entrega.'}</small>
           </div>
         </div>
 
         <div className="form-grid">
+          {cotacao && <div className="field field-wide"><label>Título da cotação / lista de preço *</label><input maxLength={180} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Lista de preço cliente X - Setembro 2026" /></div>}
           <div className="field field-wide autocomplete-wrap">
             <label>Cliente *</label>
             <input
               value={clienteBusca}
+              disabled={cotacao && itens.length > 0}
               onChange={(e) => {
                 setClienteBusca(e.target.value)
                 setClienteId('')
@@ -955,7 +975,7 @@ export function NovoPedido({
 
           <div className="field">
             <label>Filial *</label>
-            <select value={filialId} onChange={(e) => setFilialId(e.target.value)}>
+            <select disabled={cotacao && itens.length > 0} value={filialId} onChange={(e) => setFilialId(e.target.value)}>
               <option value="">Selecione</option>
               {filiais.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -967,7 +987,7 @@ export function NovoPedido({
 
           <div className="field">
             <label>Moeda *</label>
-            <select value={moeda} onChange={(e) => setMoeda(e.target.value as Moeda)}>
+            <select disabled={cotacao && itens.length > 0} value={moeda} onChange={(e) => setMoeda(e.target.value as Moeda)}>
               <option value="USD">US$ — Dólar</option>
               <option value="BRL" disabled={ptax <= 0}>
                 R$ — Real {ptax <= 0 ? '(PTAX indisponível)' : ''}
@@ -978,6 +998,7 @@ export function NovoPedido({
             )}
           </div>
 
+          {!cotacao && <>
           <div className="field autocomplete-wrap">
             <label>Prazo de pagamento</label>
             <input
@@ -1032,9 +1053,10 @@ export function NovoPedido({
             </select>
           </div>
 
+          </>}
           {admin && clienteSelecionado?.vendedor_id == null && (
             <div className="field">
-              <label>Vendedor do pedido *</label>
+              <label>Vendedor *</label>
               <select
                 value={vendedorIdAdmin}
                 onChange={(e) => setVendedorIdAdmin(e.target.value)}
@@ -1049,6 +1071,7 @@ export function NovoPedido({
             </div>
           )}
 
+          {!cotacao && <>
           <div className="field">
             <label>Data de entrega</label>
             <input
@@ -1076,6 +1099,7 @@ export function NovoPedido({
               rows={2}
             />
           </div>
+          </>}
         </div>
       </div>
 
@@ -1084,7 +1108,7 @@ export function NovoPedido({
           <span>2</span>
           <div>
             <strong>Adicionar produto</strong>
-            <small>O estoque é reservado ao salvar o pedido.</small>
+            <small>{cotacao ? 'Cotação não reserva estoque. Os preços ficam registrados na data da cotação.' : 'O estoque é reservado ao salvar o pedido.'}</small>
           </div>
         </div>
 
@@ -1446,7 +1470,7 @@ export function NovoPedido({
               className="primary-button add-item-button"
               onClick={adicionarItem}
             >
-              Adicionar produto ao pedido
+              {cotacao ? 'Adicionar produto à cotação' : 'Adicionar produto ao pedido'}
             </button>
           </div>
         )}
@@ -1456,7 +1480,7 @@ export function NovoPedido({
         <div className="section-title">
           <span>3</span>
           <div>
-            <strong>Itens do pedido</strong>
+            <strong>{cotacao ? 'Itens da cotação' : 'Itens do pedido'}</strong>
             <small>{itens.length} item(ns) incluído(s).</small>
           </div>
         </div>
@@ -1544,7 +1568,7 @@ export function NovoPedido({
           onClick={salvarPedido}
           disabled={salvando || !itens.length}
         >
-          {salvando ? 'Gravando pedido...' : 'Salvar Pedido no Supabase'}
+          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido no Supabase'}
         </button>
       </div>
     </section>
