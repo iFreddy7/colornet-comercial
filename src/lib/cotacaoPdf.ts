@@ -6,23 +6,37 @@ export interface DocumentoCotacao {
  numero: string; titulo: string; created_at: string; moeda: 'USD' | 'BRL';
  cliente: {codigo: string; nome: string; cnpj_cpf?: string; municipio?: string; uf?: string};
  vendedor: {nome: string}; filial?: {nome: string; uf: string};
+ validade?: string | null;
+ prazo_pagamento?: {codigo?: string | null; descricao: string} | null;
  itens: Array<{codigo: string|null; produto: string; ncm?: string|null; colour_index?: string|null; quantidade: number|null; preco_net?: number; preco_final: number;
  aliquota_icms: number|null; ipi: number; total_item: number|null}>;
  subtotal: number|null; valor_ipi: number|null; total: number|null; observacoes?: string;
 }
+
+function dataBr(value?: string | null) {
+ if (!value) return '—'
+ const iso=String(value).slice(0,10);const m=iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+ return m?`${m[3]}/${m[2]}/${m[1]}`:String(value)
+}
+
+function nomePdfCotacao(c: DocumentoCotacao) {
+ return `${c.numero}-${c.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9-]/g,'_').slice(0,80)}.pdf`
+}
+
 export function criarPdfCotacao(c: DocumentoCotacao) {
  const doc = new jsPDF(); doc.addFileToVFS('Colornet.ttf',regular);doc.addFont('Colornet.ttf','Colornet','normal');doc.addFileToVFS('ColornetBold.ttf',bold);doc.addFont('ColornetBold.ttf','Colornet','bold');doc.setFont('Colornet'); const money=(v:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda}).format(v).replace(/\u00a0/g,' ')
  const pct=(v:number)=>`${(v*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%`
- doc.setProperties({title:c.titulo,author:'Colornet',subject:'Cotação / Lista de preço'})
+ doc.setProperties({title:c.titulo,author:'Colornet',subject:'Cotação'})
  doc.setFillColor(79,48,174);doc.rect(0,0,210,25,'F');doc.setTextColor(255);doc.setFontSize(20);doc.text('ColorNet',14,16)
- doc.setFontSize(10);doc.text('COTAÇÃO / LISTA DE PREÇO',196,15,{align:'right'})
+ doc.setFontSize(10);doc.text('COTAÇÃO',196,15,{align:'right'})
  doc.setTextColor(30);doc.setFontSize(15)
  const title=doc.splitTextToSize(c.titulo,182);doc.text(title,14,36)
  let y=39+title.length*6
- autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9,cellPadding:2},columnStyles:{0:{cellWidth:28,fontStyle:'bold'}},body:[
+ autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9,cellPadding:2},columnStyles:{0:{cellWidth:34,fontStyle:'bold'}},body:[
  ['Referência',c.numero],['Emissão',new Date(c.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+' (Brasília)'],
  ['Cliente',`${c.cliente.codigo} - ${c.cliente.nome}`],['CPF / CNPJ',c.cliente.cnpj_cpf||'-'],
- ['Localidade',[c.cliente.municipio,c.cliente.uf].filter(Boolean).join(' / ')],['Vendedor',c.vendedor.nome],['Moeda',c.moeda==='USD'?'Dólar americano (US$)':'Real (R$)']]})
+ ['Localidade',[c.cliente.municipio,c.cliente.uf].filter(Boolean).join(' / ')],['Vendedor',c.vendedor.nome],['Moeda',c.moeda==='USD'?'Dólar americano (US$)':'Real (R$)'],
+ ['Validade da proposta',dataBr(c.validade)],['Prazo de pagamento',c.prazo_pagamento?.descricao||'—']]})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
  const temQuantidade=c.itens.some(i=>i.quantidade!=null)
  autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹',...(temQuantidade?['Total²']:[])]],
@@ -45,6 +59,14 @@ export function criarPdfCotacao(c: DocumentoCotacao) {
  const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(100);doc.text(`${c.numero} | ${p} / ${pages}`,196,288,{align:'right'})}
  return doc
 }
+
+export function pdfCotacaoBase64(c: DocumentoCotacao) {
+ const dataUri=criarPdfCotacao(c).output('datauristring')
+ const comma=dataUri.indexOf(',')
+ if (comma<0) throw new Error('Não foi possível gerar o PDF da cotação.')
+ return {nome:nomePdfCotacao(c),base64:dataUri.slice(comma+1)}
+}
+
 export function baixarPdfCotacao(c: DocumentoCotacao) {
- criarPdfCotacao(c).save(`${c.numero}-${c.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9-]/g,'_').slice(0,80)}.pdf`)
+ criarPdfCotacao(c).save(nomePdfCotacao(c))
 }
