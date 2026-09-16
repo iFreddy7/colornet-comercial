@@ -31,6 +31,13 @@ function money(value: unknown, moeda: string, casas = 2) {
   }).format(numero)
 }
 
+function percentual(value: unknown) {
+  if (value == null || value === '') return 'MANUAL'
+  const numero = Number(value)
+  if (!Number.isFinite(numero)) return 'MANUAL'
+  return `${(numero * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+}
+
 function dataBr(value: unknown) {
   if (!value) return '—'
   const iso = String(value).slice(0, 10)
@@ -155,6 +162,7 @@ Deno.serve(async (req) => {
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${item.quantidade == null ? '—' : Number(item.quantidade).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_net, cotacao.moeda, 4)}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_final, cotacao.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right"><b>${percentual(item.aliquota_icms)}</b></td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${(Number(item.ipi || 0) * 100).toFixed(2)}%</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${item.total_item == null ? '—' : money(item.total_item, cotacao.moeda)}</td>
       </tr>
@@ -186,7 +194,7 @@ Deno.serve(async (req) => {
             <thead><tr style="background:#f1edff;text-align:left">
               <th style="padding:8px">Produto</th><th style="padding:8px;text-align:right">Qtd.</th>
               <th style="padding:8px;text-align:right">Preço NET</th><th style="padding:8px;text-align:right">Preço Final</th>
-              <th style="padding:8px;text-align:right">IPI</th><th style="padding:8px;text-align:right">Total</th>
+              <th style="padding:8px;text-align:right">ICMS</th><th style="padding:8px;text-align:right">IPI</th><th style="padding:8px;text-align:right">Total</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
