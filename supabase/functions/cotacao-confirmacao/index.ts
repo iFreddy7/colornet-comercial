@@ -141,12 +141,17 @@ Deno.serve(async (req) => {
     const doc: any = cotacao.documento || {}
     const itens: any[] = Array.isArray(doc.itens) ? doc.itens : []
     const prazo = doc.prazo_pagamento?.descricao || '—'
+    const frete = doc.frete?.descricao || doc.frete?.codigo || '—'
     const validade = dataBr(doc.validade)
 
     const rows = itens.map((item) => `
       <tr>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${esc(item.produto)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${esc(item.codigo || 'SEM CÓDIGO')}</td>
+        <td style="padding:8px;border-bottom:1px solid #ddd">
+          ${esc(item.produto)}
+          <div style="font-size:11px;color:#777">Código: ${esc(item.codigo || 'SEM CÓDIGO')}</div>
+          <div style="font-size:11px;color:#777">NCM: ${esc(item.ncm || 'Não informado')}</div>
+          <div style="font-size:11px;color:#777">Colour Index: ${esc(item.colour_index || 'Não informado')}</div>
+        </td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${item.quantidade == null ? '—' : Number(item.quantidade).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_net, cotacao.moeda, 4)}</td>
         <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_final, cotacao.moeda)}</td>
@@ -174,11 +179,12 @@ Deno.serve(async (req) => {
           <p><b>Vendedor:</b> ${esc(vendedor?.nome || cotacao.vendedor_nome)}</p>
           <p><b>Cliente:</b> ${esc(doc.cliente?.codigo)} — ${esc(doc.cliente?.nome || cotacao.cliente_nome)}</p>
           <p><b>Validade da proposta:</b> ${validade} • <b>Prazo de pagamento:</b> ${esc(prazo)}</p>
+          <p><b>Frete:</b> ${esc(frete)}</p>
           <p><b>Moeda:</b> ${cotacao.moeda === 'BRL' ? 'Real (R$)' : 'Dólar americano (US$)'}</p>
 
           <table style="border-collapse:collapse;width:100%;font-size:12px;margin-top:18px">
             <thead><tr style="background:#f1edff;text-align:left">
-              <th style="padding:8px">Produto</th><th style="padding:8px">Código</th><th style="padding:8px;text-align:right">Qtd.</th>
+              <th style="padding:8px">Produto</th><th style="padding:8px;text-align:right">Qtd.</th>
               <th style="padding:8px;text-align:right">Preço NET</th><th style="padding:8px;text-align:right">Preço Final</th>
               <th style="padding:8px;text-align:right">IPI</th><th style="padding:8px;text-align:right">Total</th>
             </tr></thead>
