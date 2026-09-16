@@ -10,7 +10,7 @@ import { Home } from './pages/Home'
 import { Produtos } from './pages/Produtos'
 import { Clientes } from './pages/Clientes'
 import { NovoPedido } from './pages/NovoPedido'
-import { NovaCotacao } from './pages/NovaCotacao'
+import { NovaCotacaoV2 } from './pages/NovaCotacaoV2'
 import { Pedidos } from './pages/Pedidos'
 import { Cotacoes } from './pages/Cotacoes'
 import { Admin } from './pages/Admin'
@@ -64,7 +64,7 @@ function App() {
     {tela === 'inicio' && <Home key={`home-${refreshPedidos}-${refreshCotacoes}`} usuario={usuario} />}
     {tela === 'novo-pedido' && <NovoPedido usuario={usuario} onPedidoCriado={pedidoCriado} pedidoDuplicarId={pedidoDuplicarId} onDuplicacaoCarregada={() => setPedidoDuplicarId(null)} />}
     {tela === 'pedidos' && <Pedidos key={`pedidos-${refreshPedidos}`} usuario={usuario} onDuplicar={duplicarPedido} />}
-    {tela === 'nova-cotacao' && <NovaCotacao key={`nova-cotacao-${refreshCotacoes}`} usuario={usuario} onCotacaoCriada={cotacaoCriada} />}
+    {tela === 'nova-cotacao' && <NovaCotacaoV2 key={`nova-cotacao-${refreshCotacoes}`} usuario={usuario} onCotacaoCriada={cotacaoCriada} />}
     {tela === 'cotacoes' && <Cotacoes key={`cotacoes-${refreshCotacoes}`} usuario={usuario} />}
     {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
