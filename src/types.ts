@@ -30,6 +30,7 @@ export interface Produto {
   codigo_protheus: string | null
   nome: string
   ncm: string | null
+  colour_index?: string | null
   grupo_tributario: string | null
   status_fiscal: 'AUTOMATICO' | 'MANUAL'
   fiscal_pendencia?: string | null
@@ -87,6 +88,11 @@ export interface OpcaoCadastro {
 }
 
 export interface CalculoFiscal {
+  preco_net?: number | null
+  filial_origem_id?: string | null
+  estoque_disponivel?: number | null
+  ncm?: string | null
+  colour_index?: string | null
   automatico: boolean
   motivo?: string
   aliquota?: number
@@ -104,7 +110,11 @@ export interface ItemPedidoLocal {
   produto_id: string
   codigo: string | null
   produto: string
-  quantidade: number
+  ncm?: string | null
+  colour_index?: string | null
+  filial_origem_id?: string | null
+  entrada_preco?: 'NET' | 'FINAL'
+  quantidade: number | null
   preco_net: number
   preco_final: number
   aliquota_icms: number | null

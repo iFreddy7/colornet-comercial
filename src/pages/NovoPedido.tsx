@@ -189,6 +189,9 @@ export function NovoPedido({
 
   const [calculo, setCalculo] = useState<CalculoFiscal | null>(null)
   const [precoFinalManual, setPrecoFinalManual] = useState('')
+  const [entradaPreco, setEntradaPreco] = useState<'NET' | 'FINAL'>('NET')
+  const precoEntrada = entradaPreco === 'FINAL' ? precoFinalManual : precoNet
+  const adicionandoRef = useRef(false)
   const [observacaoPreco, setObservacaoPreco] = useState('')
 
   const [itens, setItens] = useState<ItemPedidoLocal[]>([])
@@ -294,26 +297,16 @@ export function NovoPedido({
   }, [carregandoBase, pedidoDuplicarId])
 
   useEffect(() => {
-    // Invalida já na troca de parâmetros, antes dos 350 ms de debounce.
-    // Uma resposta anterior não pode voltar a marcar o novo produto como manual.
     fiscalSeq.current += 1
     setCalculo(null)
-    setPrecoFinalManual('')
-    setObservacaoPreco('')
-
-    const net = n(precoNet)
-
-    if (!clienteId || !filialId || !produto?.id || net <= 0) {
+    if (!clienteId || (!cotacao && !filialId) || !produto?.id || n(precoEntrada) <= 0) {
       setCalculando(false)
       return
     }
-
-    const timer = window.setTimeout(() => {
-      calcularFiscalAutomatico()
-    }, 350)
-
+    setCalculando(true)
+    const timer = window.setTimeout(() => { calcularFiscalAutomatico() }, 350)
     return () => window.clearTimeout(timer)
-  }, [clienteId, filialId, produto?.id, precoNet])
+  }, [clienteId, filialId, produto?.id, entradaPreco, precoEntrada, cotacao])
 
   useEffect(() => {
     const termo = produtoBusca.trim()
@@ -461,6 +454,7 @@ export function NovoPedido({
         codigo_protheus,
         nome,
         ncm,
+        colour_index,
         grupo_tributario,
         status_fiscal,
         fiscal_pendencia,
@@ -493,12 +487,14 @@ export function NovoPedido({
     setProdutoBusca(item.nome)
     setResultadosProduto([])
     setQuantidade('')
+    setEntradaPreco('NET')
+    setPrecoFinalManual('')
     setPrecoNet('')
     setFaixa(null)
     setCalculo(null)
     setEstoque([])
     setPrevisoes([])
-    await consultarDisponibilidade(item.id)
+    if (!cotacao) await consultarDisponibilidade(item.id)
   }
 
   async function consultarDisponibilidade(produtoId: string) {
@@ -591,7 +587,7 @@ export function NovoPedido({
       const qtd = Number(item.quantidade)
       const final = result.automatico ? n(result.preco_final) : Number(item.preco_final)
       const ipi = n(result.ipi ?? produtoRel?.ipi)
-      const subtotal = Number((final * qtd).toFixed(2))
+      const subtotal = Number((final * (qtd ?? 0)).toFixed(2))
       const valorIpi = Number((subtotal * ipi).toFixed(2))
       novosItens.push({
         idLocal: idLocal(), produto_id: item.produto_id, codigo: produtoRel?.codigo_protheus || null,
@@ -630,6 +626,10 @@ export function NovoPedido({
 
     if (atual <= 0) return
 
+    fiscalSeq.current += 1
+    setCalculo(null)
+    setEntradaPreco('NET')
+    setPrecoFinalManual('')
     setPrecoNet(atual.toFixed(4))
     setFaixa(chave)
   }
@@ -637,55 +637,45 @@ export function NovoPedido({
   async function calcularFiscalAutomatico() {
     const seq = ++fiscalSeq.current
     setErro('')
-
-    if (!clienteId || !filialId || !produto) {
-      setCalculo(null)
-      return null
+    if (!clienteId || (!cotacao && !filialId) || !produto || n(precoEntrada) <= 0) {
+      setCalculo(null); setCalculando(false); return null
     }
-
-    const net = n(precoNet)
-
-    if (net <= 0) {
-      setCalculo(null)
-      return null
-    }
-
     setCalculando(true)
-
-    const { data, error } = await supabase.rpc('calcular_item_pedido', {
-      p_cliente_id: clienteId,
-      p_produto_id: produto.id,
-      p_filial_id: filialId,
-      p_preco_net: net,
-    })
-
+    const { data, error } = await supabase.rpc('calcular_preco_comercial', {
+      p_cliente_id: clienteId, p_produto_id: produto.id,
+      p_filial_id: cotacao ? null : filialId,
+      p_preco_net: entradaPreco === 'NET' ? n(precoNet) : null,
+      p_preco_final: entradaPreco === 'FINAL' ? n(precoFinalManual) : null,
+      p_cotacao: cotacao,
+    }).then(r => r, () => ({ data: null, error: { message: 'Não foi possível calcular. Tente novamente.' } }))
     if (seq !== fiscalSeq.current) return null
-
     setCalculando(false)
-
-    if (error) {
-      setErro(error.message)
-      setCalculo(null)
-      return null
-    }
-
+    if (error) { setErro(error.message); setCalculo(null); return null }
     const result = data as CalculoFiscal
     setCalculo(result)
+    if (result.automatico) {
+      if (entradaPreco === 'FINAL') setPrecoNet(n(result.preco_net).toFixed(4))
+      else setPrecoFinalManual(n(result.preco_final).toFixed(2))
+    }
     return result
   }
 
   async function adicionarItem() {
-    const result = calculo ?? (await calcularFiscalAutomatico())
+    if (adicionandoRef.current) return
+    adicionandoRef.current = true
+    try {
+    const result = await calcularFiscalAutomatico()
     if (!result || !produto) return
 
-    const qtd = n(quantidade)
-    const net = n(precoNet)
+    const qtd = cotacao && !quantidade.trim() ? null : n(quantidade)
+    const net = result.automatico ? n(result.preco_net) : n(precoNet)
 
-    if (qtd <= 0) {
+    if (qtd !== null && qtd <= 0) {
       setErro('Informe a quantidade.')
       return
     }
 
+    if (net <= 0) { setErro('Informe o preço NET. Cálculo inverso exige uma regra fiscal automática válida.'); return }
     let final = n(result.preco_final)
     let obs: string | null = null
 
@@ -705,7 +695,7 @@ export function NovoPedido({
     }
 
     const ipi = n(result.ipi)
-    const subtotal = Number((final * qtd).toFixed(2))
+    const subtotal = Number((final * (qtd ?? 0)).toFixed(2))
     const valorIpi = Number((subtotal * ipi).toFixed(2))
     const total = Number((subtotal + valorIpi).toFixed(2))
 
@@ -714,6 +704,10 @@ export function NovoPedido({
       produto_id: produto.id,
       codigo: produto.codigo_protheus,
       produto: produto.nome,
+      ncm: result.ncm ?? produto.ncm,
+      colour_index: result.colour_index ?? produto.colour_index,
+      filial_origem_id: result.filial_origem_id ?? null,
+      entrada_preco: entradaPreco,
       quantidade: qtd,
       preco_net: net,
       preco_final: final,
@@ -737,6 +731,8 @@ export function NovoPedido({
     setProduto(null)
     setProdutoBusca('')
     setQuantidade('')
+    setEntradaPreco('NET')
+    setPrecoFinalManual('')
     setPrecoNet('')
     setFaixa(null)
     setCalculo(null)
@@ -746,10 +742,11 @@ export function NovoPedido({
     setPrevisoes([])
     setCarregandoDisponibilidade(false)
     setErro('')
+    } finally { adicionandoRef.current = false }
   }
 
   function excluirItem(id: string) {
-    if (!window.confirm('Excluir este produto do pedido?')) return
+    if (!window.confirm('Excluir este produto?')) return
     setItens((atual) => atual.filter((item) => item.idLocal !== id))
   }
 
@@ -772,8 +769,8 @@ export function NovoPedido({
     setSucesso('')
     setAvisoEmail('')
 
-    if (!clienteId || !filialId) {
-      setErro('Cliente e filial são obrigatórios.')
+    if (!clienteId || (!cotacao && !filialId)) {
+      setErro(cotacao ? 'Cliente obrigatório.' : 'Cliente e filial são obrigatórios.')
       return
     }
 
@@ -788,7 +785,7 @@ export function NovoPedido({
     const cabecalho = {
       titulo: titulo.trim(),
       cliente_id: clienteId,
-      filial_id: filialId,
+      filial_id: cotacao ? null : filialId,
       moeda,
       prazo_pagamento_id: prazoId || null,
       frete_id: freteId || null,
@@ -803,13 +800,16 @@ export function NovoPedido({
       produto_id: item.produto_id,
       quantidade: item.quantidade,
       preco_net: item.preco_net,
+      preco_final: item.preco_final,
+      entrada_preco: item.entrada_preco || 'NET',
+      ...(cotacao ? { calculo_confirmado: { automatico: item.modo_fiscal === 'AUTOMATICO', filial_origem_id: item.filial_origem_id ?? null, preco_net: item.preco_net, preco_final: item.preco_final, divisor: item.divisor_icms } } : {}),
       preco_final_manual:
         item.modo_fiscal === 'MANUAL' ? item.preco_final : null,
       observacao_preco: item.observacao_preco,
       faixa_interna: item.faixa_interna,
     }))
 
-    const { data, error } = await supabase.rpc(cotacao ? 'criar_cotacao' : 'criar_pedido_v4', {
+    const { data, error } = await supabase.rpc(cotacao ? 'criar_cotacao_v2' : 'criar_pedido_v4', {
       p_cabecalho: cabecalho,
       p_itens: payloadItens,
       p_idempotency_key: idempotencyKey,
@@ -927,7 +927,7 @@ export function NovoPedido({
           <span>1</span>
           <div>
             <strong>Dados comerciais</strong>
-            <small>{cotacao ? 'Título, cliente, filial e moeda. Para trocar cliente, filial ou moeda, remova os itens primeiro.' : 'Cliente, faturamento e entrega.'}</small>
+            <small>{cotacao ? 'Título, cliente e moeda. A origem de cada produto segue o maior saldo disponível. Para trocar cliente ou moeda, remova os itens primeiro.' : 'Cliente, faturamento e entrega.'}</small>
           </div>
         </div>
 
@@ -973,6 +973,7 @@ export function NovoPedido({
             )}
           </div>
 
+          {!cotacao && <>
           <div className="field">
             <label>Filial *</label>
             <select disabled={cotacao && itens.length > 0} value={filialId} onChange={(e) => setFilialId(e.target.value)}>
@@ -985,6 +986,7 @@ export function NovoPedido({
             </select>
           </div>
 
+          </>}
           <div className="field">
             <label>Moeda *</label>
             <select disabled={cotacao && itens.length > 0} value={moeda} onChange={(e) => setMoeda(e.target.value as Moeda)}>
@@ -1159,7 +1161,7 @@ export function NovoPedido({
                 <span className="eyebrow">PRODUTO SELECIONADO</span>
                 <h3>{produto.nome}</h3>
                 <p>
-                  {produto.codigo_protheus || 'SEM CÓDIGO'} • NCM {produto.ncm || '—'}
+                  {produto.codigo_protheus || 'SEM CÓDIGO'} • NCM {produto.ncm || '—'}{cotacao && produto.colour_index ? ` • Colour Index ${produto.colour_index}` : ''}
                 </p>
               </div>
 
@@ -1175,6 +1177,7 @@ export function NovoPedido({
             </div>
             {produto.fiscal_pendencia && <p>{produto.fiscal_pendencia}</p>}
 
+            {!cotacao && <>
             <div className="availability-panel">
               <div className="availability-title">
                 <div>
@@ -1343,6 +1346,7 @@ export function NovoPedido({
               </div>
             </div>
 
+            </>}
             {preco && (
               <div className="price-options">
                 {[
@@ -1365,14 +1369,14 @@ export function NovoPedido({
 
             <div className="form-grid compact">
               <div className="field">
-                <label>Quantidade *</label>
+                <label>{cotacao ? 'Quantidade (opcional)' : 'Quantidade *'}</label>
                 <input
                   type="number"
                   min="0"
                   step="0.001"
                   value={quantidade}
                   onChange={(e) => setQuantidade(e.target.value)}
-                  placeholder="0,000"
+                  placeholder={cotacao ? "Sem quantidade: apenas preço unitário" : "0,000"}
                 />
               </div>
 
@@ -1384,11 +1388,26 @@ export function NovoPedido({
                   step="0.0001"
                   value={precoNet}
                   onChange={(e) => {
+                    fiscalSeq.current += 1
+                    if (calculo?.automatico !== false) setPrecoFinalManual('')
+                    setCalculo(null)
+                    setEntradaPreco('NET')
                     setPrecoNet(e.target.value)
                     setFaixa(null)
                   }}
                   placeholder="0,0000"
                 />
+              </div>
+
+              <div className="field">
+                <label>Preço final (sem IPI) *</label>
+                <input type="number" min="0.01" step="0.01" value={precoFinalManual}
+                  onChange={e => {
+                    fiscalSeq.current += 1
+                    if (calculo?.automatico !== false) setPrecoNet('')
+                    setCalculo(null); setEntradaPreco('FINAL'); setPrecoFinalManual(e.target.value); setFaixa(null)
+                  }} placeholder="0,00" />
+                <small>Preencha NET ou final; o outro é calculado automaticamente.</small>
               </div>
 
               <div className="field action-field">
@@ -1400,7 +1419,7 @@ export function NovoPedido({
                     ? calculo.automatico
                       ? 'Calculado automaticamente'
                       : 'Validação manual necessária'
-                    : 'Aguardando preço NET'}
+                    : 'Informe NET ou preço final'}
                 </div>
               </div>
             </div>
@@ -1427,10 +1446,7 @@ export function NovoPedido({
                       <span>IPI</span>
                       <strong>{(n(calculo.ipi) * 100).toFixed(2)}%</strong>
                     </div>
-                    <div className="fiscal-rule">
-                      <span>Regra</span>
-                      <strong>{calculo.regra || 'Automática'}</strong>
-                    </div>
+                    {!cotacao && <div className="fiscal-rule"><span>Regra</span><strong>{calculo.regra || 'Automática'}</strong></div>}
                   </>
                 ) : (
                   <div className="manual-block">
@@ -1440,17 +1456,6 @@ export function NovoPedido({
                     </div>
 
                     <div className="form-grid compact">
-                      <div className="field">
-                        <label>Preço final manual *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={precoFinalManual}
-                          onChange={(e) => setPrecoFinalManual(e.target.value)}
-                        />
-                      </div>
-
                       <div className="field field-wide">
                         <label>Observação / aprovação *</label>
                         <input
@@ -1469,6 +1474,7 @@ export function NovoPedido({
               type="button"
               className="primary-button add-item-button"
               onClick={adicionarItem}
+              disabled={calculando || salvando}
             >
               {cotacao ? 'Adicionar produto à cotação' : 'Adicionar produto ao pedido'}
             </button>
@@ -1504,16 +1510,17 @@ export function NovoPedido({
                   <td>
                     <strong>{item.produto}</strong>
                     <small>{item.codigo || 'SEM CÓDIGO'} • {item.modo_fiscal}</small>
+                    {cotacao && <small>NCM {item.ncm || 'Não informado'}{item.colour_index ? ` • Colour Index ${item.colour_index}` : ''}</small>}
                   </td>
-                  <td>{item.quantidade.toLocaleString('pt-BR')}</td>
-                  <td>{money(item.preco_net, moeda)}</td>
+                  <td>{item.quantidade == null ? '—' : item.quantidade.toLocaleString('pt-BR')}</td>
+                  <td>{money(item.preco_net, moeda, 4)}</td>
                   <td>{money(item.preco_final, moeda)}</td>
                   <td>
                     {item.aliquota_icms == null
                       ? 'MANUAL'
                       : `${(item.aliquota_icms * 100).toFixed(0)}%`}
                   </td>
-                  <td>{money(item.total_item, moeda)}</td>
+                  <td>{item.quantidade == null ? '—' : money(item.total_item, moeda)}</td>
                   <td>
                     <button
                       type="button"
@@ -1537,6 +1544,7 @@ export function NovoPedido({
           </table>
         </div>
 
+        {(!cotacao || itens.every(i => i.quantidade != null)) ? (
         <div className="order-totals">
           <div>
             <span>Subtotal</span>
@@ -1552,6 +1560,7 @@ export function NovoPedido({
           </div>
         </div>
 
+        ) : <p>Lista de preços unitários. Total geral disponível somente com quantidade em todos os itens.</p>}
         <div className="field">
           <label>Observações gerais</label>
           <textarea
