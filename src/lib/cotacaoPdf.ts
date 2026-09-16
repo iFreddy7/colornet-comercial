@@ -8,6 +8,7 @@ export interface DocumentoCotacao {
  vendedor: {nome: string}; filial?: {nome: string; uf: string};
  validade?: string | null;
  prazo_pagamento?: {codigo?: string | null; descricao: string} | null;
+ frete?: {codigo?: string | null; descricao: string} | null;
  itens: Array<{codigo: string|null; produto: string; ncm?: string|null; colour_index?: string|null; quantidade: number|null; preco_net?: number; preco_final: number;
  aliquota_icms: number|null; ipi: number; total_item: number|null}>;
  subtotal: number|null; valor_ipi: number|null; total: number|null; observacoes?: string;
@@ -36,12 +37,12 @@ export function criarPdfCotacao(c: DocumentoCotacao) {
  ['Referência',c.numero],['Emissão',new Date(c.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+' (Brasília)'],
  ['Cliente',`${c.cliente.codigo} - ${c.cliente.nome}`],['CPF / CNPJ',c.cliente.cnpj_cpf||'-'],
  ['Localidade',[c.cliente.municipio,c.cliente.uf].filter(Boolean).join(' / ')],['Vendedor',c.vendedor.nome],['Moeda',c.moeda==='USD'?'Dólar americano (US$)':'Real (R$)'],
- ['Validade da proposta',dataBr(c.validade)],['Prazo de pagamento',c.prazo_pagamento?.descricao||'—']]})
+ ['Validade da proposta',dataBr(c.validade)],['Prazo de pagamento',c.prazo_pagamento?.descricao||'—'],['Frete',c.frete?.descricao||c.frete?.codigo||'—']]})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
  const temQuantidade=c.itens.some(i=>i.quantidade!=null)
- autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹',...(temQuantidade?['Total²']:[])]],
+ autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM / Colour Index',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹',...(temQuantidade?['Total²']:[])]],
  body:c.itens.map(i=>[
-  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,i.colour_index?`Colour Index: ${i.colour_index}`:'',i.ipi>0?`IPI: ${pct(i.ipi)}`:''].filter(Boolean).join('\n'),
+  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.ipi>0?`IPI: ${pct(i.ipi)}`:''].filter(Boolean).join('\n'),
   ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
   i.preco_net==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net).replace(/\u00a0/g,' '),money(i.preco_final),
   ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
