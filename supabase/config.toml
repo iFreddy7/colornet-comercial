@@ -1,4 +1,7 @@
-# A plataforma valida o JWT, e a função revalida a sessão com auth.getUser(token)
-# e confere o perfil ADMIN ativo no banco.
+# A plataforma valida o JWT, e as funções sensíveis também revalidam a sessão
+# e conferem o perfil/autor no banco.
 [functions.admin-criar-usuario]
+verify_jwt = true
+
+[functions.cotacao-confirmacao]
 verify_jwt = true
