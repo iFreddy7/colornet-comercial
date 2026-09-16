@@ -21,7 +21,7 @@ create policy "admin consulta criacao usuarios" on public.admin_usuario_eventos
   for select to authenticated using ((select private.is_admin()));
 
 -- Exclusiva da Edge Function: jamais disponível ao navegador.
-create or replace function public.admin_finalizar_novo_usuario(
+create or replace function private.admin_finalizar_novo_usuario_impl(
   p_administrador_id uuid, p_usuario_id uuid, p_criacao_id uuid,
   p_nome text, p_email text, p_perfil text, p_vendedor_id uuid
 ) returns void language plpgsql security definer set search_path = '' as $$
@@ -62,6 +62,18 @@ begin
     values(p_usuario_id, p_administrador_id, trim(p_nome), lower(trim(p_email)), p_perfil, p_vendedor_id);
 end;
 $$;
+revoke all on function private.admin_finalizar_novo_usuario_impl(uuid,uuid,uuid,text,text,text,uuid)
+  from public, anon, authenticated;
+grant usage on schema private to service_role;
+grant execute on function private.admin_finalizar_novo_usuario_impl(uuid,uuid,uuid,text,text,text,uuid) to service_role;
+
+create or replace function public.admin_finalizar_novo_usuario(
+  p_administrador_id uuid, p_usuario_id uuid, p_criacao_id uuid,
+  p_nome text, p_email text, p_perfil text, p_vendedor_id uuid
+) returns void language sql security invoker set search_path = '' as $$
+  select private.admin_finalizar_novo_usuario_impl(p_administrador_id, p_usuario_id,
+    p_criacao_id, p_nome, p_email, p_perfil, p_vendedor_id);
+$$;
 revoke all on function public.admin_finalizar_novo_usuario(uuid,uuid,uuid,text,text,text,uuid)
   from public, anon, authenticated;
 grant execute on function public.admin_finalizar_novo_usuario(uuid,uuid,uuid,text,text,text,uuid) to service_role;
@@ -72,7 +84,7 @@ create or replace function public.admin_exportar_pedidos_v1(
   p_data_inicio date default null, p_data_fim date default null,
   p_vendedor_id uuid default null, p_filial_id uuid default null,
   p_status text default null
-) returns jsonb language plpgsql stable security definer set search_path = '' as $$
+) returns jsonb language plpgsql stable security invoker set search_path = '' as $$
 declare v_resultado jsonb;
 begin
   if not (select private.is_admin()) then

@@ -22,10 +22,10 @@ O banco deve conter as fases 4, 5 e 7 já usadas pelo portal.
 1. No mesmo projeto, abra **Edge Functions → Deploy a new function → Via Editor**.
 2. Use exatamente o nome **admin-criar-usuario**.
 3. Substitua o conteúdo de `index.ts` pelo arquivo [index.ts](../supabase/functions/admin-criar-usuario/index.ts) desta versão e publique.
-4. Nas configurações dessa função, desative a verificação automática de JWT legado
+4. Nas configurações dessa função, mantenha ativada a verificação automática de JWT
    (**Verify JWT / Enforce JWT verification**, conforme o painel apresentar).
 
-Essa configuração é específica desta função: o próprio código valida o token com
+Além da validação da plataforma, o próprio código valida o token com
 `auth.getUser` e consulta se o solicitante é um ADMIN ativo. Requisições sem sessão,
 de vendedor, gerente ou ADMIN inativo são recusadas. A configuração equivalente
 para a CLI está em `supabase/config.toml`.

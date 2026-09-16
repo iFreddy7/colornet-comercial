@@ -56,6 +56,7 @@ await db.query("insert into movimentos_estoque values ($1,$2,$3,$4,1,'SAIDA_PEDI
 await db.query("insert into movimentos_previsao values ($1,$2,$3,$4,2,'RESERVA_PREVISAO',$5,now())",[id(23),id(11),product,branch,seller])
 await db.query("insert into email_logs values ($1,$2,'ENVIADO',ARRAY['destino@example.invalid'],now())",[id(24),id(11)])
 await db.exec(migration)
+await db.exec("grant select on all tables in schema public to authenticated")
 
 async function asRole<T>(role: string, actor: string, run: () => Promise<T>): Promise<T> {
   await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor])
