@@ -4,6 +4,7 @@ import type { AdminUsuario, Filial, IntegracaoExecucao, UsuarioApp } from '../ty
 import { APP_ENV_LABEL } from '../lib/env'
 import { Loading } from '../components/Loading'
 import { AdminNovoUsuario } from '../components/AdminNovoUsuario'
+import { AdminNovoVendedor } from '../components/AdminNovoVendedor'
 import { AdminExportacao } from '../components/AdminExportacao'
 import { dataHoraBrasilia } from '../lib/dataHora'
 
@@ -99,7 +100,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         <div>
           <span className="eyebrow">ADMINISTRAÇÃO • {APP_ENV_LABEL}</span>
           <h1>Painel ADMIN</h1>
-          <p>Cadastro de usuários, vínculos, relatórios e acompanhamento das integrações.</p>
+          <p>Cadastro de usuários, vendedores, vínculos, relatórios e acompanhamento das integrações.</p>
         </div>
         <button className="secondary-button" onClick={carregar}>Atualizar</button>
       </div>
@@ -114,6 +115,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         <div className="stat-card"><span>Clientes sem vendedor</span><strong>{clientesSemVendedor}</strong></div>
       </div>
 
+      <AdminNovoVendedor onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
       <AdminNovoUsuario vendedores={vendedores} onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
       <AdminExportacao vendedores={vendedores} filiais={filiais} />
 
