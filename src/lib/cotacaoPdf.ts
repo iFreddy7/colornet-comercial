@@ -27,6 +27,7 @@ function nomePdfCotacao(c: DocumentoCotacao) {
 export function criarPdfCotacao(c: DocumentoCotacao) {
  const doc = new jsPDF(); doc.addFileToVFS('Colornet.ttf',regular);doc.addFont('Colornet.ttf','Colornet','normal');doc.addFileToVFS('ColornetBold.ttf',bold);doc.addFont('ColornetBold.ttf','Colornet','bold');doc.setFont('Colornet'); const money=(v:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda}).format(v).replace(/\u00a0/g,' ')
  const pct=(v:number)=>`${(v*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%`
+ const icms=(v:number|null)=>v==null?'MANUAL':pct(v)
  doc.setProperties({title:c.titulo,author:'Colornet',subject:'Cotação'})
  doc.setFillColor(79,48,174);doc.rect(0,0,210,25,'F');doc.setTextColor(255);doc.setFontSize(20);doc.text('ColorNet',14,16)
  doc.setFontSize(10);doc.text('COTAÇÃO',196,15,{align:'right'})
@@ -40,14 +41,14 @@ export function criarPdfCotacao(c: DocumentoCotacao) {
  ['Validade da proposta',dataBr(c.validade)],['Prazo de pagamento',c.prazo_pagamento?.descricao||'—'],['Frete',c.frete?.descricao||c.frete?.codigo||'—']]})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
  const temQuantidade=c.itens.some(i=>i.quantidade!=null)
- autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM / Colour Index',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹',...(temQuantidade?['Total²']:[])]],
+ autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM / Colour Index',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹','ICMS',...(temQuantidade?['Total²']:[])]],
  body:c.itens.map(i=>[
   [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.ipi>0?`IPI: ${pct(i.ipi)}`:''].filter(Boolean).join('\n'),
   ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
-  i.preco_net==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net).replace(/\u00a0/g,' '),money(i.preco_final),
+  i.preco_net==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net).replace(/\u00a0/g,' '),money(i.preco_final),icms(i.aliquota_icms),
   ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
  styles:{font:'Colornet',fontSize:8,cellPadding:3,overflow:'linebreak'},headStyles:{fillColor:[79,48,174]},
- columnStyles:{0:{cellWidth:temQuantidade?65:100},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}},rowPageBreak:'avoid'})
+ columnStyles:temQuantidade?{0:{cellWidth:58},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}}:{0:{cellWidth:88},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},rowPageBreak:'avoid'})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
  if (c.total!=null && c.itens.every(i=>i.quantidade!=null)) {
   autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9},body:[['Subtotal',money(c.subtotal??0)],['IPI',money(c.valor_ipi??0)],['Total',money(c.total)]],columnStyles:{0:{fontStyle:'bold'},1:{halign:'right'}}})
