@@ -4,6 +4,7 @@ import type { UsuarioApp } from '../types'
 import type { DocumentoCotacao } from '../lib/cotacaoPdf'
 
 type Linha={id:string;numero:string;titulo:string;created_at:string;cliente_nome:string;vendedor_nome:string;moeda:string}
+function dataBr(value?:string|null){if(!value)return '—';const m=String(value).slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}/${m[2]}/${m[1]}`:String(value)}
 export function Cotacoes({usuario}:{usuario:UsuarioApp}) {
  const [linhas,setLinhas]=useState<Linha[]>([]),[busca,setBusca]=useState(''),[cliente,setCliente]=useState(''),[vendedor,setVendedor]=useState('')
  const [pagina,setPagina]=useState(0),[total,setTotal]=useState(0),[erro,setErro]=useState(''),[carregando,setCarregando]=useState(true),[pdf,setPdf]=useState('')
@@ -34,6 +35,7 @@ export function Cotacoes({usuario}:{usuario:UsuarioApp}) {
  {detalhe&&<div className="form-card">
   <button className="secondary-button" onClick={()=>setDetalhe(null)}>Fechar detalhes</button>
   <h2>{detalhe.titulo}</h2><p>{detalhe.cliente.nome} • {detalhe.numero}</p>
+  <p><strong>Validade:</strong> {dataBr(detalhe.validade)} • <strong>Prazo de pagamento:</strong> {detalhe.prazo_pagamento?.descricao||'—'}</p>
   <div className="table-scroll"><table><thead><tr><th>Produto</th><th>NCM / Colour Index</th><th>Qtd.</th><th>NET</th><th>Final</th><th>IPI</th><th>Total</th></tr></thead>
   <tbody>{detalhe.itens.map((i,n)=><tr key={n}>
    <td>{i.produto}<small>{i.codigo}</small></td><td>{i.ncm||'—'}{i.colour_index&&<small>Colour Index: {i.colour_index}</small>}</td>
