@@ -19,37 +19,37 @@ security definer
 set search_path=''
 as $$
 declare
-  codigo text := nullif(trim(p_codigo_protheus),'');
-  nome text := nullif(trim(p_nome),'');
-  email text := lower(nullif(trim(p_email),''));
+  codigo_normalizado text := nullif(trim(p_codigo_protheus),'');
+  nome_normalizado text := nullif(trim(p_nome),'');
+  email_normalizado text := lower(nullif(trim(p_email),''));
   novo public.vendedores%rowtype;
 begin
   if not exists(
-    select 1 from public.usuarios
-    where id=auth.uid() and ativo and perfil='ADMIN'
+    select 1 from public.usuarios u
+    where u.id=auth.uid() and u.ativo and u.perfil='ADMIN'
   ) then
     raise exception 'Acesso restrito a ADMIN ativo.' using errcode='42501';
   end if;
 
-  if codigo is null or length(codigo) > 40 then
+  if codigo_normalizado is null or length(codigo_normalizado) > 40 then
     raise exception 'Informe o código do vendedor no Protheus.';
   end if;
-  if nome is null or length(nome) > 120 then
+  if nome_normalizado is null or length(nome_normalizado) > 120 then
     raise exception 'Informe o nome do vendedor.';
   end if;
-  if email is null or length(email) > 254 or email !~* '^[^[:space:]@]+@colornet[.]com[.]br$' then
+  if email_normalizado is null or length(email_normalizado) > 254 or email_normalizado !~* '^[^[:space:]@]+@colornet[.]com[.]br$' then
     raise exception 'Informe um e-mail corporativo @colornet.com.br válido.';
   end if;
 
-  if exists(select 1 from public.vendedores where codigo_protheus=codigo) then
+  if exists(select 1 from public.vendedores v where v.codigo_protheus=codigo_normalizado) then
     raise exception 'Já existe um vendedor com este código Protheus.';
   end if;
-  if exists(select 1 from public.vendedores where lower(coalesce(email,''))=email) then
+  if exists(select 1 from public.vendedores v where lower(coalesce(v.email,''))=email_normalizado) then
     raise exception 'Já existe um vendedor com este e-mail.';
   end if;
 
   insert into public.vendedores(codigo_protheus,nome,email,ativo)
-  values(codigo,nome,email,true)
+  values(codigo_normalizado,nome_normalizado,email_normalizado,true)
   returning * into novo;
 
   return jsonb_build_object(
@@ -170,16 +170,16 @@ begin
   end if;
 
   select * into prazo
-  from public.prazos_pagamento
-  where id=nullif(p_cabecalho->>'prazo_pagamento_id','')::uuid and ativo;
+  from public.prazos_pagamento pp
+  where pp.id=nullif(p_cabecalho->>'prazo_pagamento_id','')::uuid and pp.ativo;
 
   if not found then
     raise exception 'Selecione um prazo de pagamento ativo.';
   end if;
 
   select * into c
-  from public.clientes
-  where id=(p_cabecalho->>'cliente_id')::uuid and ativo;
+  from public.clientes cl
+  where cl.id=(p_cabecalho->>'cliente_id')::uuid and cl.ativo;
 
   if not found then
     raise exception 'Cliente indisponível.';
@@ -190,12 +190,12 @@ begin
   end if;
 
   select * into v
-  from public.vendedores
-  where id=case
+  from public.vendedores vend
+  where vend.id=case
     when u.perfil='ADMIN' then coalesce(c.vendedor_id,nullif(p_cabecalho->>'vendedor_id','')::uuid)
     else u.vendedor_id
   end
-  and ativo;
+  and vend.ativo;
 
   if not found then
     raise exception 'Selecione um vendedor ativo.';
@@ -217,8 +217,8 @@ begin
     end if;
 
     select * into p
-    from public.produtos
-    where id=(item->>'produto_id')::uuid and ativo;
+    from public.produtos prod
+    where prod.id=(item->>'produto_id')::uuid and prod.ativo;
 
     if not found then
       raise exception 'Produto indisponível.';
