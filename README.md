@@ -1,5 +1,14 @@
 # ColorNet Comercial — GitHub e Cloudflare Pages
 
+## Fase 9 — usuários e Excel no ADMIN
+
+Para ativar esta versão, siga [o passo a passo da Fase 9](docs/ATIVAR_ADMIN_FASE9.md)
+antes de publicar o painel atualizado. Ele inclui a migração SQL e a Edge Function
+`admin-criar-usuario`, instaladas uma única vez no Supabase.
+
+Veja também [como funcionam as atualizações e a futura aba de cotações](docs/ATUALIZACOES_E_COTACOES.md).
+Os testes desta fase podem ser executados com `npm test` (Node 24).
+
 Frontend completo com as correções fiscais, horário de Brasília, reserva de
 estoque e cancelamento já validados no projeto. O ciclo de criar pedido,
 reservar estoque, cancelar e estornar foi confirmado por João antes desta etapa.

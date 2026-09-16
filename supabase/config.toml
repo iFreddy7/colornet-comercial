@@ -1,0 +1,4 @@
+# O JWT é validado dentro da função por auth.getUser(token), seguido da
+# conferência de ADMIN ativo no banco. Compatível com as novas chaves do Auth.
+[functions.admin-criar-usuario]
+verify_jwt = false
