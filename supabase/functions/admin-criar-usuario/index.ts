@@ -38,7 +38,7 @@ export async function handleCreateUser(req: Request, admin: SupabaseClient): Pro
     const vendedorId = body.vendedor_id == null || body.vendedor_id === '' ? null : String(body.vendedor_id)
     if (nome.length < 2 || nome.length > 120) return reply(400, { erro: 'Informe um nome entre 2 e 120 caracteres.' })
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { erro: 'Informe um e-mail válido.' })
-    if (senha.length < 12 || senha.length > 128 || !senha.trim()) return reply(400, { erro: 'A senha inicial deve ter entre 12 e 128 caracteres.' })
+    if (senha.length < 8 || senha.length > 128 || !senha.trim()) return reply(400, { erro: 'A senha inicial deve ter entre 8 e 128 caracteres.' })
     if (!['VENDEDOR','GERENTE','ADMIN'].includes(perfil)) return reply(400, { erro: 'Perfil inválido.' })
     if ((perfil === 'VENDEDOR' && !vendedorId) || (vendedorId && !uuid.test(vendedorId))) {
       return reply(400, { erro: 'Selecione o vendedor vinculado à conta.' })
