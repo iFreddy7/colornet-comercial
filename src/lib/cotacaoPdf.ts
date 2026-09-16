@@ -5,10 +5,10 @@ import autoTable from 'jspdf-autotable'
 export interface DocumentoCotacao {
  numero: string; titulo: string; created_at: string; moeda: 'USD' | 'BRL';
  cliente: {codigo: string; nome: string; cnpj_cpf?: string; municipio?: string; uf?: string};
- vendedor: {nome: string}; filial: {nome: string; uf: string};
- itens: Array<{codigo: string|null; produto: string; quantidade: number; preco_final: number;
- aliquota_icms: number|null; ipi: number; total_item: number}>;
- subtotal: number; valor_ipi: number; total: number; observacoes?: string;
+ vendedor: {nome: string}; filial?: {nome: string; uf: string};
+ itens: Array<{codigo: string|null; produto: string; ncm?: string|null; colour_index?: string|null; quantidade: number|null; preco_net?: number; preco_final: number;
+ aliquota_icms: number|null; ipi: number; total_item: number|null}>;
+ subtotal: number|null; valor_ipi: number|null; total: number|null; observacoes?: string;
 }
 export function criarPdfCotacao(c: DocumentoCotacao) {
  const doc = new jsPDF(); doc.addFileToVFS('Colornet.ttf',regular);doc.addFont('Colornet.ttf','Colornet','normal');doc.addFileToVFS('ColornetBold.ttf',bold);doc.addFont('ColornetBold.ttf','Colornet','bold');doc.setFont('Colornet'); const money=(v:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda}).format(v).replace(/\u00a0/g,' ')
@@ -22,16 +22,26 @@ export function criarPdfCotacao(c: DocumentoCotacao) {
  autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9,cellPadding:2},columnStyles:{0:{cellWidth:28,fontStyle:'bold'}},body:[
  ['Referência',c.numero],['Emissão',new Date(c.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})+' (Brasília)'],
  ['Cliente',`${c.cliente.codigo} - ${c.cliente.nome}`],['CPF / CNPJ',c.cliente.cnpj_cpf||'-'],
- ['Localidade',[c.cliente.municipio,c.cliente.uf].filter(Boolean).join(' / ')],['Vendedor',c.vendedor.nome],['Filial',c.filial.nome],['Moeda',c.moeda==='USD'?'Dólar americano (US$)':'Real (R$)']]})
+ ['Localidade',[c.cliente.municipio,c.cliente.uf].filter(Boolean).join(' / ')],['Vendedor',c.vendedor.nome],['Moeda',c.moeda==='USD'?'Dólar americano (US$)':'Real (R$)']]})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
- autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código','Qtd. (KG)','Preço unit.¹','ICMS','IPI','Total²']],
- body:c.itens.map(i=>[`${i.produto}\n${i.codigo||'Sem código'}`,i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3}),money(i.preco_final),i.aliquota_icms==null?'-':pct(i.aliquota_icms),pct(i.ipi),money(i.total_item)]),
+ const temQuantidade=c.itens.some(i=>i.quantidade!=null)
+ autoTable(doc,{startY:y,margin:{top:15,bottom:20},head:[['Produto / Código / NCM',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹',...(temQuantidade?['Total²']:[])]],
+ body:c.itens.map(i=>[
+  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,i.colour_index?`Colour Index: ${i.colour_index}`:'',i.ipi>0?`IPI: ${pct(i.ipi)}`:''].filter(Boolean).join('\n'),
+  ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
+  i.preco_net==null?'-':new Intl.NumberFormat('pt-BR',{style:'currency',currency:c.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net).replace(/\u00a0/g,' '),money(i.preco_final),
+  ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
  styles:{font:'Colornet',fontSize:8,cellPadding:3,overflow:'linebreak'},headStyles:{fillColor:[79,48,174]},
- columnStyles:{0:{cellWidth:61},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}},rowPageBreak:'avoid'})
+ columnStyles:{0:{cellWidth:temQuantidade?65:100},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}},rowPageBreak:'avoid'})
  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+7
- autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9},body:[['Subtotal',money(c.subtotal)],['IPI',money(c.valor_ipi)],['Total',money(c.total)]],columnStyles:{0:{fontStyle:'bold'},1:{halign:'right'}}})
- y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+5
- autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:8},body:[['¹ Preço unitário com ICMS, sem IPI. ² Total inclui IPI.'],['Disponibilidade sujeita à confirmação. Esta cotação não reserva estoque.'],...(c.observacoes?[[`Observações: ${c.observacoes}`]]:[])]})
+ if (c.total!=null && c.itens.every(i=>i.quantidade!=null)) {
+  autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:9},body:[['Subtotal',money(c.subtotal??0)],['IPI',money(c.valor_ipi??0)],['Total',money(c.total)]],columnStyles:{0:{fontStyle:'bold'},1:{halign:'right'}}})
+  y=(doc as jsPDF & {lastAutoTable:{finalY:number}}).lastAutoTable.finalY+5
+ }
+ autoTable(doc,{startY:y,theme:'plain',styles:{font:'Colornet',fontSize:8},body:[
+ ['¹ Preço final unitário com ICMS, sem IPI. NET e final expressos por KG.'],
+ ...(temQuantidade?[['² Total do item inclui IPI. Itens sem quantidade não possuem total.']]:[]),
+ ['Disponibilidade sujeita à confirmação. Esta cotação não reserva estoque.'],...(c.observacoes?[[`Observações: ${c.observacoes}`]]:[])]})
  const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(100);doc.text(`${c.numero} | ${p} / ${pages}`,196,288,{align:'right'})}
  return doc
 }

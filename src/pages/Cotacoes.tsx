@@ -31,6 +31,16 @@ export function Cotacoes({usuario}:{usuario:UsuarioApp}) {
  {erro&&<div className="alert error">{erro}</div>}
  <div className="form-card"><p>{carregando?'Carregando...':`${total} documento(s)`}</p><div className="table-scroll"><table><thead><tr><th>Título / Número</th><th>Cliente</th><th>Vendedor</th><th>Emissão</th><th>Ações</th></tr></thead><tbody>{linhas.map(l=><tr key={l.id}><td><strong>{l.titulo}</strong><small>{l.numero}</small></td><td>{l.cliente_nome}</td><td>{l.vendedor_nome}</td><td>{new Date(l.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</td><td><button className="secondary-button" disabled={!!pdf} onClick={()=>abrir(l.id,false)}>Ver itens</button>{' '}<button className="primary-button" disabled={!!pdf} onClick={()=>abrir(l.id,true)}>{pdf===l.id?'Abrindo...':'Baixar PDF'}</button></td></tr>)}{!carregando&&!linhas.length&&<tr><td colSpan={5}>Nenhuma cotação encontrada.</td></tr>}</tbody></table></div>
  <button className="secondary-button" disabled={carregando||pagina===0} onClick={()=>setPagina(p=>p-1)}>Anterior</button>{' '}Página {pagina+1}{' '}<button className="secondary-button" disabled={carregando||(pagina+1)*25>=total} onClick={()=>setPagina(p=>p+1)}>Próxima</button></div>
- {detalhe&&<div className="form-card"><button className="secondary-button" onClick={()=>setDetalhe(null)}>Fechar detalhes</button><h2>{detalhe.titulo}</h2><p>{detalhe.cliente.nome} • {detalhe.numero}</p><div className="table-scroll"><table><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço unitário</th><th>IPI</th><th>Total</th></tr></thead><tbody>{detalhe.itens.map((i,n)=><tr key={n}><td>{i.produto}<small>{i.codigo}</small></td><td>{i.quantidade}</td><td>{moeda(i.preco_final,detalhe.moeda)}</td><td>{(i.ipi*100).toFixed(2)}%</td><td>{moeda(i.total_item,detalhe.moeda)}</td></tr>)}</tbody></table></div><p>Total: <strong>{moeda(detalhe.total,detalhe.moeda)}</strong></p><p>{detalhe.observacoes}</p></div>}
+ {detalhe&&<div className="form-card">
+  <button className="secondary-button" onClick={()=>setDetalhe(null)}>Fechar detalhes</button>
+  <h2>{detalhe.titulo}</h2><p>{detalhe.cliente.nome} • {detalhe.numero}</p>
+  <div className="table-scroll"><table><thead><tr><th>Produto</th><th>NCM / Colour Index</th><th>Qtd.</th><th>NET</th><th>Final</th><th>IPI</th><th>Total</th></tr></thead>
+  <tbody>{detalhe.itens.map((i,n)=><tr key={n}>
+   <td>{i.produto}<small>{i.codigo}</small></td><td>{i.ncm||'—'}{i.colour_index&&<small>Colour Index: {i.colour_index}</small>}</td>
+   <td>{i.quantidade??'—'}</td><td>{i.preco_net==null?'—':new Intl.NumberFormat('pt-BR',{style:'currency',currency:detalhe.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net)}</td>
+   <td>{moeda(i.preco_final,detalhe.moeda)}</td><td>{(i.ipi*100).toFixed(2)}%</td><td>{i.total_item==null?'—':moeda(i.total_item,detalhe.moeda)}</td>
+  </tr>)}</tbody></table></div>
+  {detalhe.total==null?<p>Lista de preços unitários, sem total geral.</p>:<p>Total: <strong>{moeda(detalhe.total,detalhe.moeda)}</strong></p>}<p>{detalhe.observacoes}</p>
+ </div>}
  </section>
 }

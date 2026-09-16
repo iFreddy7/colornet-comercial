@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Produto } from '../types'
+import type { Produto, UsuarioApp } from '../types'
 import { Loading } from '../components/Loading'
 
 function money(value: number | null | undefined) {
@@ -16,7 +16,9 @@ function getPreco(produto: Produto) {
   return Array.isArray(produto.precos) ? produto.precos[0] ?? null : produto.precos
 }
 
-export function Produtos() {
+export function Produtos({usuario}: {usuario: UsuarioApp}) {
+  const [edicao, setEdicao] = useState<{id:string;nome:string;valor:string}|null>(null)
+  const [salvandoCI, setSalvandoCI] = useState(false)
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [busca, setBusca] = useState('')
   const [carregando, setCarregando] = useState(true)
@@ -37,6 +39,7 @@ export function Produtos() {
         codigo_protheus,
         nome,
         ncm,
+        colour_index,
         grupo_tributario,
         status_fiscal,
         fiscal_pendencia,
@@ -73,6 +76,18 @@ export function Produtos() {
     setCarregando(false)
   }
 
+  async function salvarColourIndex(event: FormEvent) {
+    event.preventDefault()
+    if (!edicao || salvandoCI) return
+    setSalvandoCI(true); setErro('')
+    try {
+      const {error} = await supabase.rpc('admin_definir_colour_index', {p_produto_id: edicao.id, p_colour_index: edicao.valor})
+      if (error) {setErro(error.message); return}
+      setProdutos(atual => atual.map(p => p.id === edicao.id ? {...p, colour_index: edicao.valor.trim() || null} : p))
+      setEdicao(null)
+    } catch {setErro('Não foi possível salvar o Colour Index.')} finally {setSalvandoCI(false)}
+  }
+
   function pesquisar(event: FormEvent) {
     event.preventDefault()
     carregar(busca)
@@ -98,6 +113,11 @@ export function Produtos() {
       </form>
 
       {erro && <div className="alert error">{erro}</div>}
+      {edicao && usuario.perfil === 'ADMIN' && <form className="form-card" onSubmit={salvarColourIndex}>
+        <div className="field"><label>Colour Index - {edicao.nome}</label><input maxLength={200} value={edicao.valor} onChange={e => setEdicao({...edicao,valor:e.target.value})} placeholder="Informe conforme cadastro técnico do produto" /></div>
+        <button className="primary-button" disabled={salvandoCI}>Salvar Colour Index</button>{' '}
+        <button type="button" className="secondary-button" disabled={salvandoCI} onClick={()=>setEdicao(null)}>Cancelar</button>
+      </form>}
 
       {carregando ? (
         <Loading texto="Buscando produtos..." />
@@ -131,6 +151,8 @@ export function Produtos() {
                         <small>
                           {produto.ncm ? `NCM ${produto.ncm}` : 'NCM não informado'}
                         </small>
+                        {produto.colour_index && <small>Colour Index: {produto.colour_index}</small>}
+                        {usuario.perfil === 'ADMIN' && <button className="secondary-button" onClick={()=>setEdicao({id:produto.id,nome:produto.nome,valor:produto.colour_index || ''})}>Editar Colour Index</button>}
                       </td>
                       <td>{produto.codigo_protheus || 'SEM CÓDIGO'}</td>
                       <td>

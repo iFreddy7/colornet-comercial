@@ -63,7 +63,7 @@ function App() {
     {tela === 'pedidos' && <Pedidos key={`pedidos-${refreshPedidos}`} usuario={usuario} onDuplicar={duplicarPedido} />}
     {tela === 'nova-cotacao' && <NovoPedido key="cotacao" cotacao usuario={usuario} onPedidoCriado={() => {}} />}
     {tela === 'cotacoes' && <Cotacoes usuario={usuario} />}
-    {tela === 'produtos' && <Produtos />}
+    {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}
   </Layout>
