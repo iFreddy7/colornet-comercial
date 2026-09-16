@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AdminUsuario, IntegracaoExecucao, UsuarioApp } from '../types'
+import type { AdminUsuario, Filial, IntegracaoExecucao, UsuarioApp } from '../types'
 import { APP_ENV_LABEL } from '../lib/env'
 import { Loading } from '../components/Loading'
+import { AdminNovoUsuario } from '../components/AdminNovoUsuario'
+import { AdminExportacao } from '../components/AdminExportacao'
+import { dataHoraBrasilia } from '../lib/dataHora'
 
 type Vendedor = { id: string; codigo_protheus: string | null; nome: string; email: string | null; ativo: boolean }
 
@@ -11,13 +14,12 @@ function rel<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value
 }
 
-function dataHora(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
-}
+const dataHora = dataHoraBrasilia
 
 export function Admin({ usuario }: { usuario: UsuarioApp }) {
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [filiais, setFiliais] = useState<Filial[]>([])
   const [integracoes, setIntegracoes] = useState<IntegracaoExecucao[]>([])
   const [clientesSemVendedor, setClientesSemVendedor] = useState(0)
   const [carregando, setCarregando] = useState(true)
@@ -25,24 +27,26 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
   const [erro, setErro] = useState('')
   const [mensagem, setMensagem] = useState('')
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { if (usuario.perfil === 'ADMIN' && usuario.ativo) carregar() }, [usuario.id, usuario.perfil, usuario.ativo])
 
   async function carregar() {
     setCarregando(true)
     setErro('')
 
-    const [u, v, i, c] = await Promise.all([
+    const [u, v, i, c, f] = await Promise.all([
       supabase.from('usuarios').select(`id,nome,email,perfil,vendedor_id,ativo,vendedores(nome,codigo_protheus)`).order('nome'),
-      supabase.from('vendedores').select('id,codigo_protheus,nome,email,ativo').eq('ativo', true).order('nome'),
+      supabase.from('vendedores').select('id,codigo_protheus,nome,email,ativo').order('nome'),
       supabase.from('integracao_execucoes').select('*').order('criado_em', { ascending: false }).limit(30),
       supabase.rpc('admin_clientes_sem_vendedor'),
+      supabase.from('filiais').select('id,codigo,nome,uf').order('nome'),
     ])
 
-    const firstError = u.error || v.error || i.error || c.error
+    const firstError = u.error || v.error || i.error || c.error || f.error
     if (firstError) setErro(firstError.message)
 
     setUsuarios((u.data ?? []) as AdminUsuario[])
     setVendedores((v.data ?? []) as Vendedor[])
+    setFiliais((f.data ?? []) as Filial[])
     setIntegracoes((i.data ?? []) as IntegracaoExecucao[])
     setClientesSemVendedor(Number(c.data ?? 0))
     setCarregando(false)
@@ -86,7 +90,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     vendedoresSemVinculo: usuarios.filter((u) => u.ativo && u.perfil === 'VENDEDOR' && !u.vendedor_id).length,
   }), [usuarios])
 
-  if (usuario.perfil !== 'ADMIN') return <div className="alert error">Acesso restrito a ADMIN.</div>
+  if (usuario.perfil !== 'ADMIN' || !usuario.ativo) return <div className="alert error">Acesso restrito a ADMIN ativo.</div>
   if (carregando) return <section className="page"><Loading texto="Carregando administração..." /></section>
 
   return (
@@ -95,7 +99,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         <div>
           <span className="eyebrow">ADMINISTRAÇÃO • {APP_ENV_LABEL}</span>
           <h1>Painel ADMIN</h1>
-          <p>Usuários, vínculos e acompanhamento das integrações por e-mail.</p>
+          <p>Cadastro de usuários, vínculos, relatórios e acompanhamento das integrações.</p>
         </div>
         <button className="secondary-button" onClick={carregar}>Atualizar</button>
       </div>
@@ -109,6 +113,9 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         <div className="stat-card"><span>Vendedores sem vínculo</span><strong>{stats.vendedoresSemVinculo}</strong></div>
         <div className="stat-card"><span>Clientes sem vendedor</span><strong>{clientesSemVendedor}</strong></div>
       </div>
+
+      <AdminNovoUsuario vendedores={vendedores} onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
+      <AdminExportacao vendedores={vendedores} filiais={filiais} />
 
       <div className="form-card">
         <div className="section-title"><span>1</span><div><strong>Usuários</strong><small>Perfil, vendedor e ativação sem SQL manual.</small></div></div>
@@ -129,7 +136,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
                     <td>
                       <select value={item.vendedor_id || ''} onChange={(e) => alterarLocal(item.id, { vendedor_id: e.target.value || null })}>
                         <option value="">Sem vínculo</option>
-                        {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome}{v.codigo_protheus ? ` • ${v.codigo_protheus}` : ''}</option>)}
+                        {vendedores.filter(v => v.ativo || v.id === item.vendedor_id).map((v) => <option key={v.id} value={v.id}>{v.nome}{v.codigo_protheus ? ` • ${v.codigo_protheus}` : ''}{v.ativo ? '' : ' (inativo)'}</option>)}
                       </select>
                       {vend && <small>Atual: {vend.nome}</small>}
                     </td>
@@ -145,7 +152,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
 
       <div className="form-card">
         <div className="section-title"><span>2</span><div><strong>Integrações por e-mail</strong><small>Últimas leituras de estoque, preços e previsão.</small></div></div>
-        <div className="integration-legend"><span className="badge neutral">DRY RUN = não altera dados</span><span className="badge success">APLICADO = atualizou homologação</span></div>
+        <div className="integration-legend"><span className="badge neutral">DRY RUN = não altera dados</span><span className="badge success">APLICADO = atualizou os dados</span></div>
         <div className="table-scroll">
           <table>
             <thead><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th>Modo</th><th>Status</th><th>Linhas</th><th>Pendências</th></tr></thead>

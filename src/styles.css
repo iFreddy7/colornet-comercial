@@ -1813,6 +1813,8 @@ tbody tr:last-child td {
 .admin-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
 .admin-users-table select { min-width:145px; border:1px solid #ddd8e7; border-radius:9px; padding:8px; background:white; }
 .admin-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.admin-fieldset { border:0; padding:0; margin:0; min-width:0; }
+.admin-fieldset .field-help { margin:14px 0; }
 .switch-line { display:flex; align-items:center; gap:7px; }
 .integration-legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
 .order-summary-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; padding:0; }
