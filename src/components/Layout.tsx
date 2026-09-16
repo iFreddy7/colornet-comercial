@@ -9,6 +9,8 @@ export type Tela =
   | 'produtos'
   | 'clientes'
   | 'admin'
+  | 'nova-cotacao'
+  | 'cotacoes'
 
 interface LayoutProps {
   usuario: UsuarioApp
@@ -80,6 +82,8 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
           <button className={tela === 'pedidos' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('pedidos')}>
             <span>≡</span>{admin ? 'Todos os Pedidos' : 'Meus Pedidos'}
           </button>
+          <button className={tela === 'nova-cotacao' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('nova-cotacao')}><span>＋</span>Nova Cotação / Lista</button>
+          <button className={tela === 'cotacoes' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('cotacoes')}><span>≡</span>{admin ? 'Todas as Cotações' : 'Minhas Cotações'}</button>
           <button className={tela === 'produtos' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('produtos')}>
             <span>□</span>Produtos
           </button>

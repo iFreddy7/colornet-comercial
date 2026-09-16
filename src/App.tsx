@@ -11,6 +11,7 @@ import { Produtos } from './pages/Produtos'
 import { Clientes } from './pages/Clientes'
 import { NovoPedido } from './pages/NovoPedido'
 import { Pedidos } from './pages/Pedidos'
+import { Cotacoes } from './pages/Cotacoes'
 import { Admin } from './pages/Admin'
 
 function App() {
@@ -60,6 +61,8 @@ function App() {
     {tela === 'inicio' && <Home key={`home-${refreshPedidos}`} usuario={usuario} />}
     {tela === 'novo-pedido' && <NovoPedido usuario={usuario} onPedidoCriado={pedidoCriado} pedidoDuplicarId={pedidoDuplicarId} onDuplicacaoCarregada={() => setPedidoDuplicarId(null)} />}
     {tela === 'pedidos' && <Pedidos key={`pedidos-${refreshPedidos}`} usuario={usuario} onDuplicar={duplicarPedido} />}
+    {tela === 'nova-cotacao' && <NovoPedido key="cotacao" cotacao usuario={usuario} onPedidoCriado={() => {}} />}
+    {tela === 'cotacoes' && <Cotacoes usuario={usuario} />}
     {tela === 'produtos' && <Produtos />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}
