@@ -45,7 +45,17 @@ function App() {
     const { data, error } = await supabase.from('usuarios').select('id,nome,email,perfil,vendedor_id,ativo').eq('id', userId).single()
     if (error) { setErro('Login realizado, mas não foi possível carregar public.usuarios: ' + error.message); setUsuario(null) }
     else if (!data.ativo) { setErro('Seu usuário está inativo.'); await supabase.auth.signOut() }
-    else setUsuario(data as UsuarioApp)
+    else {
+      // Atualiza a PTAX D-1 antes de montar as telas de pedido/cotação.
+      // Falha do BCB não bloqueia o login: o último fechamento válido permanece no banco.
+      try {
+        const { error: ptaxError } = await supabase.functions.invoke('ptax-atualizar', { body: {} })
+        if (ptaxError) console.warn('PTAX não atualizada nesta sessão:', ptaxError.message)
+      } catch (ptaxError) {
+        console.warn('PTAX não atualizada nesta sessão:', ptaxError)
+      }
+      setUsuario(data as UsuarioApp)
+    }
     setCarregando(false)
   }
 
