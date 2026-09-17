@@ -1,7 +1,19 @@
-# A plataforma valida o JWT, e as funções sensíveis também revalidam a sessão
-# e conferem o perfil/autor no banco.
+# Funções chamadas pelo portal usam JWT. Integrações máquina-a-máquina
+# mantêm verify_jwt=false e validam segredo próprio no corpo da função.
 [functions.admin-criar-usuario]
 verify_jwt = true
 
 [functions.cotacao-confirmacao]
 verify_jwt = true
+
+[functions.ptax-atualizar]
+verify_jwt = true
+
+[functions.swift-function]
+verify_jwt = true
+
+[functions.pedido-confirmacao]
+verify_jwt = false
+
+[functions.ingest-email-xlsx]
+verify_jwt = false
