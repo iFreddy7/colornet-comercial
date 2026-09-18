@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { UsuarioApp } from '../types'
+import { IS_PRODUCTION } from '../lib/env'
 
 export type Tela =
   | 'inicio'
@@ -30,6 +31,10 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
 
   return (
     <div className="app-shell">
+      {!IS_PRODUCTION && (
+        <div className="environment-banner">HOMOLOGAÇÃO</div>
+      )}
+
       <header className="mobile-topbar">
         <button
           type="button"
@@ -40,6 +45,7 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
           ☰
         </button>
         <div className="mobile-brand">ColorNet</div>
+        {!IS_PRODUCTION && <span className="env-chip">HOMOLOGAÇÃO</span>}
       </header>
 
       {menuAberto && (
@@ -59,6 +65,8 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
             <span>Comercial</span>
           </div>
         </div>
+
+        {!IS_PRODUCTION && <div className="sidebar-env">HOMOLOGAÇÃO</div>}
 
         <nav className="nav">
           <button className={tela === 'inicio' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('inicio')}>
