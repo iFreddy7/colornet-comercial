@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 
 type ModoLogin = 'login' | 'recuperar' | 'primeiro'
 
@@ -87,7 +86,6 @@ export function Login({ mensagemInicial = '' }: { mensagemInicial?: string }) {
         className="login-card login-card-expanded"
         onSubmit={recuperacao ? enviarAcesso : entrar}
       >
-        <div className="login-env-line"><span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span></div>
         <div className="login-brand">
           <div className="brand-mark large">C</div>
           <div>
