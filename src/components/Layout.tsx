@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react'
 import type { UsuarioApp } from '../types'
-import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 
 export type Tela =
   | 'inicio'
@@ -31,12 +30,6 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
 
   return (
     <div className="app-shell">
-      {!IS_PRODUCTION && (
-        <div className="environment-banner">
-          AMBIENTE DE {APP_ENV_LABEL} • dados de teste • não utilizar como produção
-        </div>
-      )}
-
       <header className="mobile-topbar">
         <button
           type="button"
@@ -47,7 +40,6 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
           ☰
         </button>
         <div className="mobile-brand">ColorNet</div>
-        <span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span>
       </header>
 
       {menuAberto && (
@@ -66,10 +58,6 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
             <strong>ColorNet</strong>
             <span>Comercial</span>
           </div>
-        </div>
-
-        <div className={IS_PRODUCTION ? 'sidebar-env prod' : 'sidebar-env'}>
-          {APP_ENV_LABEL}
         </div>
 
         <nav className="nav">
