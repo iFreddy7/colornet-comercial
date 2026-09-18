@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AdminUsuario, Filial, IntegracaoExecucao, UsuarioApp } from '../types'
-import { APP_ENV_LABEL } from '../lib/env'
 import { Loading } from '../components/Loading'
 import { AdminNovoUsuario } from '../components/AdminNovoUsuario'
 import { AdminNovoVendedor } from '../components/AdminNovoVendedor'
@@ -98,7 +97,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     <section className="page">
       <div className="page-header">
         <div>
-          <span className="eyebrow">ADMINISTRAÇÃO • {APP_ENV_LABEL}</span>
+          <span className="eyebrow">ADMINISTRAÇÃO</span>
           <h1>Painel ADMIN</h1>
           <p>Cadastro de usuários, vendedores, vínculos, relatórios e acompanhamento das integrações.</p>
         </div>
