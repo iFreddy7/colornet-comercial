@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { IS_PRODUCTION } from '../lib/env'
 
 type ModoLogin = 'login' | 'recuperar' | 'primeiro'
 
@@ -87,10 +86,7 @@ export function Login({ mensagemInicial = '' }: { mensagemInicial?: string }) {
         className="login-card login-card-expanded"
         onSubmit={recuperacao ? enviarAcesso : entrar}
       >
-        {!IS_PRODUCTION && (
-          <div className="login-env-line"><span className="env-chip">HOMOLOGAÇÃO</span></div>
-        )}
-        <div className="login-brand">
+<div className="login-brand">
           <div className="brand-mark large">C</div>
           <div>
             <h1>ColorNet</h1>
