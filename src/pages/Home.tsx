@@ -9,6 +9,8 @@ type PedidoDashboard = {
   moeda: string
   vendedor_id: string | null
   vendedores: { nome: string } | Array<{ nome: string }> | null
+  ptax_valor: number | string | null
+  ptax_data_referencia: string | null
   pedido_itens: Array<{
     quantidade: number | string | null
     preco_net: number | string | null
@@ -27,14 +29,25 @@ function relNome(value: PedidoDashboard['vendedores']) {
   return Array.isArray(value) ? value[0]?.nome || 'Sem vendedor' : value.nome || 'Sem vendedor'
 }
 
-function valorNetPedido(pedido: PedidoDashboard) {
-  if (pedido.moeda !== 'USD') return 0
-
+function valorNetOriginal(pedido: PedidoDashboard) {
   return (pedido.pedido_itens ?? []).reduce((total, item) => {
     const quantidade = Number(item.quantidade ?? 0)
     const precoNet = Number(item.preco_net ?? 0)
     return total + quantidade * precoNet
   }, 0)
+}
+
+function valorNetPedidoUsd(pedido: PedidoDashboard) {
+  const netOriginal = valorNetOriginal(pedido)
+
+  if (pedido.moeda === 'USD') return netOriginal
+
+  if (pedido.moeda === 'BRL') {
+    const ptax = Number(pedido.ptax_valor ?? 0)
+    return ptax > 0 ? netOriginal / ptax : 0
+  }
+
+  return 0
 }
 
 function usd(valor: number) {
@@ -77,7 +90,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
         contar('filiais'),
         supabase
           .from('pedidos')
-          .select('id,status,moeda,vendedor_id,vendedores(nome),pedido_itens(quantidade,preco_net)')
+          .select('id,status,moeda,vendedor_id,ptax_valor,ptax_data_referencia,vendedores(nome),pedido_itens(quantidade,preco_net)')
           .order('created_at', { ascending: false }),
       ])
 
@@ -100,12 +113,12 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
   }
 
   const netUsdTotal = useMemo(
-    () => pedidosDashboard.reduce((total, pedido) => total + valorNetPedido(pedido), 0),
+    () => pedidosDashboard.reduce((total, pedido) => total + valorNetPedidoUsd(pedido), 0),
     [pedidosDashboard]
   )
 
-  const pedidosBrl = useMemo(
-    () => pedidosDashboard.filter((pedido) => pedido.moeda !== 'USD').length,
+  const pedidosBrlSemPtax = useMemo(
+    () => pedidosDashboard.filter((pedido) => pedido.moeda === 'BRL' && Number(pedido.ptax_valor ?? 0) <= 0).length,
     [pedidosDashboard]
   )
 
@@ -122,7 +135,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
       }
 
       atual.pedidos += 1
-      atual.netUsd += valorNetPedido(pedido)
+      atual.netUsd += valorNetPedidoUsd(pedido)
       mapa.set(id, atual)
     }
 
@@ -164,7 +177,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
             <div className="stat-card dashboard-highlight">
               <span>{admin ? 'NET total em US$' : 'Meu NET total em US$'}</span>
               <strong className="dashboard-money">{usd(netUsdTotal)}</strong>
-              <small>soma de quantidade × preço NET em pedidos USD</small>
+              <small>soma NET em US$; pedidos BRL são convertidos pela PTAX registrada no dia</small>
             </div>
 
             <div className="stat-card">
@@ -180,9 +193,9 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
             </div>
           </div>
 
-          {pedidosBrl > 0 && (
+          {pedidosBrlSemPtax > 0 && (
             <div className="alert warning-box dashboard-note">
-              {pedidosBrl} pedido(s) em R$ não entram no total em US$, para evitar conversão com PTAX diferente da data original do pedido.
+              {pedidosBrlSemPtax} pedido(s) em R$ ainda não possuem PTAX histórica registrada e não entram no total em US$.
             </div>
           )}
 
@@ -192,7 +205,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
                 <span>↗</span>
                 <div>
                   <strong>Desempenho por vendedor</strong>
-                  <small>Pedidos ativos e valor NET acumulado em dólar.</small>
+                  <small>Pedidos ativos e valor NET acumulado em dólar, com conversão histórica de pedidos em BRL.</small>
                 </div>
               </div>
 
@@ -228,8 +241,8 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
                 <span className="eyebrow">MEU DESEMPENHO</span>
                 <h2>{stats.pedidos.toLocaleString('pt-BR')} pedido(s) ativo(s)</h2>
                 <p>
-                  Seu valor NET acumulado nos pedidos em dólar é <strong>{usd(netUsdTotal)}</strong>.
-                  Pedidos cancelados são desconsiderados automaticamente.
+                  Seu valor NET acumulado convertido para dólar é <strong>{usd(netUsdTotal)}</strong>.
+                  Pedidos em BRL usam a PTAX registrada no momento da inclusão e pedidos cancelados são desconsiderados automaticamente.
                 </p>
               </div>
             </div>
