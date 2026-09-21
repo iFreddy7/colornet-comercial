@@ -2015,3 +2015,70 @@ tbody tr:last-child td {
     display: inline;
   }
 }
+
+
+/* ============================================================
+   DASHBOARD COMERCIAL
+   ============================================================ */
+.dashboard-main-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.dashboard-highlight {
+  border-color: #ddd4f7;
+  background: linear-gradient(180deg, #ffffff, #faf8ff);
+}
+
+.dashboard-money {
+  font-size: 25px !important;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-note {
+  margin-bottom: 18px;
+}
+
+.dashboard-sellers {
+  margin-top: 0;
+}
+
+.dashboard-sellers-table {
+  min-width: 560px;
+}
+
+.dashboard-sellers-table th:nth-child(2),
+.dashboard-sellers-table td:nth-child(2) {
+  width: 130px;
+  text-align: center;
+}
+
+.dashboard-sellers-table th:nth-child(3),
+.dashboard-sellers-table td:nth-child(3) {
+  width: 220px;
+  text-align: right;
+}
+
+.dashboard-personal {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-personal strong {
+  color: #4b329a;
+}
+
+@media (max-width: 900px) {
+  .dashboard-main-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-main-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-money {
+    font-size: 23px !important;
+  }
+}
