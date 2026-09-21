@@ -2082,3 +2082,50 @@ tbody tr:last-child td {
     font-size: 23px !important;
   }
 }
+
+
+/* ============================================================
+   ADMIN — LINK TEMPORÁRIO DE SENHA
+   ============================================================ */
+.password-link-card {
+  border-color: #ded4fb;
+  background: #fcfbff;
+}
+
+.password-link-warning {
+  margin-bottom: 12px;
+  border: 1px solid #f0d799;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #6c5517;
+  background: #fff9e8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.password-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.password-link-row input {
+  min-width: 0;
+  border: 1px solid #dcd8e7;
+  border-radius: 10px;
+  padding: 10px 11px;
+  background: white;
+  color: #393043;
+  font: inherit;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .password-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .password-link-row button {
+    width: 100%;
+  }
+}
