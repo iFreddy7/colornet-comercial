@@ -1991,3 +1991,27 @@ tbody tr:last-child td {
     width: 100%;
   }
 }
+
+/* ============================================================
+   AJUSTE MOBILE — MENU VERTICAL
+   ============================================================ */
+@media (max-width: 900px) {
+  .sidebar .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .sidebar .nav-item {
+    width: 100%;
+    min-height: 46px;
+    justify-content: flex-start;
+    padding: 0 14px;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .sidebar .nav-item span {
+    display: inline;
+  }
+}
