@@ -33,9 +33,9 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_URL: https://duojavyrugezvlvuuwag.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
-          VITE_APP_ENV: HOMOLOGACAO
+          VITE_APP_ENV: PRODUCAO
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
