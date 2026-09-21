@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL } from '../lib/env'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import type {
   CalculoFiscal,
   Cliente,
@@ -865,11 +865,15 @@ export function NovoPedido({
     setSucesso(mensagem)
 
     if (resposta?.pedido_id) {
-      const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
-        body: { pedido_id: resposta.pedido_id },
-      })
-      if (emailError) {
-        setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
+      if (IS_PRODUCTION) {
+        const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
+          body: { pedido_id: resposta.pedido_id },
+        })
+        if (emailError) {
+          setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
+        }
+      } else {
+        setAvisoEmail('HOMOLOGAÇÃO: pedido salvo sem envio de e-mail real.')
       }
     }
 
