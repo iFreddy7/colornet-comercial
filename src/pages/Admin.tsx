@@ -26,6 +26,8 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
   const [salvandoId, setSalvandoId] = useState<string | null>(null)
   const [erro, setErro] = useState('')
   const [mensagem, setMensagem] = useState('')
+  const [gerandoLinkId, setGerandoLinkId] = useState<string | null>(null)
+  const [linkSenha, setLinkSenha] = useState<{ nome: string; email: string; link: string } | null>(null)
 
   useEffect(() => { if (usuario.perfil === 'ADMIN' && usuario.ativo) carregar() }, [usuario.id, usuario.perfil, usuario.ativo])
 
@@ -74,14 +76,45 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     await carregar()
   }
 
-  async function redefinirSenha(alvo: AdminUsuario) {
+  async function gerarLinkSenha(alvo: AdminUsuario) {
     if (!alvo.email) return
     setErro('')
     setMensagem('')
-    const redirectTo = `${window.location.origin}${window.location.pathname}`
-    const { error } = await supabase.auth.resetPasswordForEmail(alvo.email, { redirectTo })
-    if (error) { setErro(error.message); return }
-    setMensagem(`Link de redefinição solicitado para ${alvo.email}.`)
+    setLinkSenha(null)
+    setGerandoLinkId(alvo.id)
+
+    const { data, error } = await supabase.functions.invoke('admin-gerar-link-senha', {
+      body: { usuario_id: alvo.id },
+    })
+
+    setGerandoLinkId(null)
+
+    if (error) {
+      setErro('Não foi possível gerar o link. Confirme se o usuário existe no Auth da homologação.')
+      return
+    }
+
+    if (!data?.link) {
+      setErro(data?.erro || 'O Supabase não retornou o link de redefinição.')
+      return
+    }
+
+    setLinkSenha({
+      nome: data.nome || alvo.nome || 'Usuário',
+      email: data.email || alvo.email,
+      link: data.link,
+    })
+    setMensagem(`Link temporário gerado para ${data.email || alvo.email}.`)
+  }
+
+  async function copiarLinkSenha() {
+    if (!linkSenha?.link) return
+    try {
+      await navigator.clipboard.writeText(linkSenha.link)
+      setMensagem('Link copiado. Envie somente ao usuário correto.')
+    } catch {
+      setErro('Não foi possível copiar automaticamente. Selecione o link e copie manualmente.')
+    }
   }
 
   const stats = useMemo(() => ({
@@ -106,6 +139,25 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
 
       {erro && <div className="alert error">{erro}</div>}
       {mensagem && <div className="alert success">{mensagem}</div>}
+      {linkSenha && (
+        <div className="form-card password-link-card">
+          <div className="section-title">
+            <span>🔑</span>
+            <div>
+              <strong>Link temporário de redefinição</strong>
+              <small>{linkSenha.nome} • {linkSenha.email}</small>
+            </div>
+          </div>
+          <div className="password-link-warning">
+            Este link permite trocar a senha da conta. Compartilhe somente com o usuário correto e evite deixá-lo salvo em conversas públicas.
+          </div>
+          <div className="password-link-row">
+            <input value={linkSenha.link} readOnly aria-label="Link temporário de redefinição de senha" />
+            <button className="primary-button" onClick={copiarLinkSenha}>Copiar link</button>
+            <button className="secondary-button" onClick={() => setLinkSenha(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
 
       <div className="admin-stats">
         <div className="stat-card"><span>Usuários ativos</span><strong>{stats.ativos}</strong></div>
@@ -142,7 +194,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
                       {vend && <small>Atual: {vend.nome}</small>}
                     </td>
                     <td><label className="switch-line"><input type="checkbox" checked={item.ativo} onChange={(e) => alterarLocal(item.id, { ativo: e.target.checked })}/><span>{item.ativo ? 'Sim' : 'Não'}</span></label></td>
-                    <td><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" onClick={() => redefinirSenha(item)}>Redefinir senha</button></div></td>
+                    <td><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" disabled={gerandoLinkId === item.id} onClick={() => gerarLinkSenha(item)}>{gerandoLinkId === item.id ? 'Gerando...' : 'Gerar link de senha'}</button></div></td>
                   </tr>
                 )
               })}
