@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL } from '../lib/env'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import { pdfCotacaoBase64, type DocumentoCotacao } from '../lib/cotacaoPdf'
 import type {
   CalculoFiscal,
@@ -485,15 +485,19 @@ export function NovaCotacaoV2({
       }
 
       const pdf = pdfCotacaoBase64(registro.documento as DocumentoCotacao)
-      const { error: emailError } = await supabase.functions.invoke('cotacao-confirmacao', {
-        body: {
-          cotacao_id: data.id,
-          pdf_nome: pdf.nome,
-          pdf_base64: pdf.base64,
-        },
-      })
-      if (emailError) throw emailError
-      emailOk = true
+      if (IS_PRODUCTION) {
+        const { error: emailError } = await supabase.functions.invoke('cotacao-confirmacao', {
+          body: {
+            cotacao_id: data.id,
+            pdf_nome: pdf.nome,
+            pdf_base64: pdf.base64,
+          },
+        })
+        if (emailError) throw emailError
+        emailOk = true
+      } else {
+        setAvisoEmail('HOMOLOGAÇÃO: cotação salva sem envio de e-mail real.')
+      }
     } catch (emailError) {
       console.error('Confirmação da cotação:', emailError)
       setAvisoEmail(
