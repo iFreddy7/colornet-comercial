@@ -34,9 +34,21 @@ export default defineConfig(({ command, mode }) => {
 
     const ref = projetoDaUrl(env.VITE_SUPABASE_URL)
     const cfBranch = (process.env.CF_PAGES_BRANCH || '').trim()
-    const esperadoPorBranch = cfBranch
-      ? (cfBranch === 'main' ? 'PRODUCAO' : 'HOMOLOGACAO')
-      : appEnv === 'HOMOLOGACAO' ? 'HOMOLOGACAO' : 'PRODUCAO'
+    const vercelEnv = (process.env.VERCEL_ENV || '').trim().toLowerCase()
+    const vercelBranch = (process.env.VERCEL_GIT_COMMIT_REF || '').trim()
+
+    let esperadoPorBranch: 'PRODUCAO' | 'HOMOLOGACAO'
+    if (cfBranch) {
+      esperadoPorBranch = cfBranch === 'main' ? 'PRODUCAO' : 'HOMOLOGACAO'
+    } else if (vercelEnv) {
+      esperadoPorBranch = vercelEnv === 'production' ? 'PRODUCAO' : 'HOMOLOGACAO'
+      if (vercelEnv === 'production' && vercelBranch && vercelBranch !== 'main') {
+        throw new Error(`Deploy de produção na Vercel bloqueado: a branch ${vercelBranch} não é a main.`)
+      }
+    } else {
+      esperadoPorBranch = appEnv === 'HOMOLOGACAO' ? 'HOMOLOGACAO' : 'PRODUCAO'
+    }
+
     const refEsperado = esperadoPorBranch === 'PRODUCAO' ? PROD_REF : HOMOLOG_REF
 
     if (esperadoPorBranch === 'PRODUCAO' && !['PRODUCAO', 'PRODUCTION'].includes(appEnv)) {
