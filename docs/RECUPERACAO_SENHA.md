@@ -31,6 +31,8 @@ O código não consegue corrigir sozinho uma Site URL/allowlist remota incorreta
 
 ## Verificação antes de promover
 
+O login também depende de as policies conseguirem executar `private.is_admin()` e `private.current_vendedor_id()`. A migração `20260923201942_restore_rls_identity_helper_execute.sql` concede EXECUTE somente a authenticated e mantém anon/PUBLIC sem acesso. As funções consultam apenas auth.uid(); USAGE do schema privado, funções de escrita e as policies permanecem inalteradas. Ao validar, execute a leitura de usuarios sob o papel authenticated com o sub de uma conta de teste: deve retornar o próprio perfil, sem outros perfis, para VENDEDOR. Uma consulta como postgres não testa RLS.
+
 1. Rodar npm ci, npm test e npm run build com as variáveis de homologação. Conferir que builds com branch/ambiente trocados falham.
 2. Abrir o alias de homologação: testar link expirado, malformado, vazio e usuário já autenticado com link inválido. Nenhum deve permitir salvar senha.
 3. Com conta de teste exclusiva da homologação, solicitar e receber e-mail; confirmar origem, projeto e template. Abrir primeiro sem clicar em Continuar (token não consumido), depois confirmar, salvar e entrar com a nova senha. Conferir recarga da página, reutilização do link e senha antiga recusada.
@@ -38,4 +40,3 @@ O código não consegue corrigir sozinho uma Site URL/allowlist remota incorreta
 5. Após aprovação e teste completo, transportar somente os arquivos desta correção para uma branch baseada em main. Não mesclar toda homologacao: as branches contêm outras diferenças. Configuração e template de produção só devem ser atualizados depois que o frontend de produção for compatível.
 
 Referências: https://supabase.com/docs/guides/auth/passwords ; https://supabase.com/docs/guides/auth/redirect-urls ; https://supabase.com/docs/guides/auth/auth-email-templates
-
