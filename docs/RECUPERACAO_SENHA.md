@@ -2,9 +2,9 @@
 
 ## Ambientes separados
 
-| Ambiente | Branch | Supabase | Portal Cloudflare estável |
+| Ambiente | Branch | Supabase | Portal estável |
 | --- | --- | --- | --- |
-| Produção | main | duojavyrugezvlvuuwag | https://colornet-comercial.pages.dev |
+| Produção | main | duojavyrugezvlvuuwag | https://colornet-comercial.vercel.app |
 | Homologação | homologacao | nqyddagfawklfqwumlie | https://homologacao.colornet-comercial.pages.dev |
 
 Na Vercel: Production deve publicar somente main com PRODUCAO e o Supabase de produção; Preview deve usar HOMOLOGACAO e o Supabase de homologação. Use o alias estável da branch homologacao, confirmado no painel, em vez de um endereço temporário de commit. Não use o domínio corporativo até confirmar DNS e HTTPS. As validações existentes de build e cliente continuam ativas.
@@ -12,10 +12,11 @@ Na Vercel: Production deve publicar somente main com PRODUCAO e o Supabase de pr
 ## Configuração obrigatória no Supabase Auth, em cada projeto
 
 1. Em Authentication → URL Configuration, use como **Site URL** o portal HTTPS estável desse ambiente, sem localhost. Não copie a URL de produção para homologação.
-2. Em **Redirect URLs**, adicione a URL exata do portal com `/?recovery=1`. No Cloudflare: `https://homologacao.colornet-comercial.pages.dev/?recovery=1` na homologação; `https://colornet-comercial.pages.dev/?recovery=1` na produção. Autorize separadamente o alias HTTPS estável da Vercel se ele também for utilizado. Preserve URLs antigas em uso durante a transição. Evite curingas amplos.
+2. Em **Redirect URLs**, adicione a URL exata do portal com `/?recovery=1`: `https://homologacao.colornet-comercial.pages.dev/?recovery=1` na homologação; `https://colornet-comercial.vercel.app/?recovery=1` na produção. Autorize separadamente o alias HTTPS estável da Vercel se ele também for utilizado. Preserve URLs antigas em uso durante a transição. Evite curingas amplos.
 3. Publique e valide primeiro o novo frontend. Somente depois configure **Reset password** com o conteúdo de `supabase/templates/recovery.html`. O template usa RedirectTo e TokenHash, nunca uma URL fixa de localhost. Requests do portal sempre enviam RedirectTo. Para disparos manuais pelo painel, informe explicitamente o redirect do ambiente ou use o fluxo do portal.
-4. Verifique o SMTP e a expiração configurada do token. Não aumente a validade para tentar mascarar links já consumidos. Desabilite o rastreamento de links no provedor SMTP.
-5. Na função administrativa `admin-gerar-link-senha`, APP_URL opcional deve ser a origem HTTPS estável do mesmo ambiente. Sem APP_URL, a função escolhe o Cloudflare correspondente ao project ref. Publique essa função apenas depois do frontend.
+4. Configure também **Invite user** com `supabase/templates/invite.html`. Convites usam SiteURL (o portal estável do próprio projeto) e TokenHash com `type=invite`; funcionam pelo painel mesmo sem RedirectTo. Manter o convite padrão com ConfirmationURL ainda permite que verificadores automáticos consumam o link antes do usuário. Convites antigos não são alterados: emita um novo para uma conta ainda não confirmada; contas já confirmadas devem usar recuperação.
+5. Verifique o SMTP e a expiração configurada do token. Não aumente a validade para tentar mascarar links já consumidos. Desabilite o rastreamento de links no provedor SMTP.
+6. Na função administrativa `admin-gerar-link-senha`, APP_URL opcional deve ser a origem HTTPS estável do mesmo ambiente. Sem APP_URL, a função escolhe o Cloudflare correspondente ao project ref. Publique essa função apenas depois do frontend.
 
 O código não consegue corrigir sozinho uma Site URL/allowlist remota incorreta: um redirect rejeitado pelo Supabase pode cair na Site URL. Configurar apenas VITE_* não modifica essas opções do Auth. O template e este documento são arquivos versionados; não aplicam automaticamente configuração ao projeto hospedado.
 
@@ -37,3 +38,4 @@ O código não consegue corrigir sozinho uma Site URL/allowlist remota incorreta
 5. Após aprovação e teste completo, transportar somente os arquivos desta correção para uma branch baseada em main. Não mesclar toda homologacao: as branches contêm outras diferenças. Configuração e template de produção só devem ser atualizados depois que o frontend de produção for compatível.
 
 Referências: https://supabase.com/docs/guides/auth/passwords ; https://supabase.com/docs/guides/auth/redirect-urls ; https://supabase.com/docs/guides/auth/auth-email-templates
+
