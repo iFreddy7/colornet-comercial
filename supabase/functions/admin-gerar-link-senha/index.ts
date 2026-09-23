@@ -64,7 +64,18 @@ Deno.serve(async (req) => {
     if (alvoError || !alvo?.email) return reply(404, { erro: 'Usuário ou e-mail não encontrado.' })
     if (!alvo.ativo) return reply(400, { erro: 'O usuário está inativo.' })
 
-    const redirectTo = 'https://homologacao.colornet-comercial.pages.dev'
+    const projectRef = new URL(Deno.env.get('SUPABASE_URL')!).hostname.split('.')[0]
+    const defaultOrigins: Record<string, string> = {
+      nqyddagfawklfqwumlie: 'https://homologacao.colornet-comercial.pages.dev',
+      duojavyrugezvlvuuwag: 'https://colornet-comercial.pages.dev',
+    }
+    const configuredOrigin = Deno.env.get('APP_URL') || defaultOrigins[projectRef]
+    if (!configuredOrigin) return reply(503, { erro: 'Endereço do portal não configurado neste ambiente.' })
+    const portal = new URL(configuredOrigin)
+    if (portal.protocol !== 'https:' || portal.username || portal.password || ['localhost', '127.0.0.1', '[::1]'].includes(portal.hostname)) {
+      return reply(503, { erro: 'Configure APP_URL com o endereço HTTPS deste ambiente.' })
+    }
+    const redirectTo = `${portal.origin}/?recovery=1`
 
     const { data, error } = await admin.auth.admin.generateLink({
       type: 'recovery',
@@ -74,13 +85,15 @@ Deno.serve(async (req) => {
 
     if (error) {
       if (String(error.message || '').toLowerCase().includes('user')) {
-        return reply(404, { erro: 'Este perfil ainda não possui usuário no Supabase Auth da homologação.' })
+        return reply(404, { erro: 'Este perfil ainda não possui usuário no Supabase Auth deste ambiente.' })
       }
       return reply(502, { erro: 'Não foi possível gerar o link de redefinição.' })
     }
 
-    const link = data?.properties?.action_link
-    if (!link) return reply(502, { erro: 'O Supabase não retornou o link de redefinição.' })
+    const tokenHash = data?.properties?.hashed_token
+    if (!tokenHash) return reply(502, { erro: 'O Supabase não retornou o link de redefinição.' })
+    // The page verifies only after the user presses Continue, not on an email scanner GET.
+    const link = `${redirectTo}#type=recovery&token_hash=${encodeURIComponent(tokenHash)}`
 
     console.info('Link de recuperação gerado', {
       administrador_id: auth.user.id,
