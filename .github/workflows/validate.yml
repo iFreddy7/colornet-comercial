@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, homologacao]
   pull_request:
-    branches: [main]
+    branches: [main, homologacao]
   workflow_dispatch:
 
 permissions:
