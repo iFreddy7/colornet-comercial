@@ -48,6 +48,18 @@ test('token hash is not consumed until resolver is explicitly called', async () 
   assert.deepEqual(calls, ['verify', 'getUser'])
 })
 
+test('invitation waits for confirmation and verifies the invite token exactly once', async () => {
+  const requests: unknown[] = []
+  const { auth } = fakeAuth({ verifyOtp: async (request: unknown) => {
+    requests.push(request)
+    return { data: { session: { user: { id: 'recovery-user' } } }, error: null }
+  } })
+  const resolve = createRecoveryResolver(auth, readRecoveryLink('https://portal.test/#type=invite&token_hash=invite-hash'))
+  assert.deepEqual(requests, [])
+  assert.deepEqual(await Promise.all([resolve(), resolve()]), [{ userId: 'recovery-user' }, { userId: 'recovery-user' }])
+  assert.deepEqual(requests, [{ token_hash: 'invite-hash', type: 'invite' }])
+})
+
 test('missing/incomplete/wrong-type tokens never fall back to an existing login', async () => {
   for (const fragment of ['?recovery=1', '#type=recovery', '#type=recovery&access_token=a', '#type=signup&token_hash=h']) {
     const { auth, calls } = fakeAuth()
