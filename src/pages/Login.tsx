@@ -1,10 +1,12 @@
 import { FormEvent, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
+import { authErrorMessage, recoveryRedirect } from '../lib/passwordRecovery'
 
 type ModoLogin = 'login' | 'recuperar' | 'primeiro'
 
-export function Login({ mensagemInicial = '' }: { mensagemInicial?: string }) {
-  const [modo, setModo] = useState<ModoLogin>('login')
+export function Login({ mensagemInicial = '', recuperar = false }: { mensagemInicial?: string; recuperar?: boolean }) {
+  const [modo, setModo] = useState<ModoLogin>(recuperar ? 'recuperar' : 'login')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
@@ -54,25 +56,16 @@ export function Login({ mensagemInicial = '' }: { mensagemInicial?: string }) {
 
     setCarregando(true)
 
-    const redirectTo = `${window.location.origin}${window.location.pathname}`
-
-    const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
-      redirectTo,
-    })
-
-    setCarregando(false)
-
-    if (error) {
-      setErro(error.message)
-      return
-    }
-
-    // Não revelamos se o e-mail existe ou não.
-    setMensagem(
-      modo === 'primeiro'
-        ? 'Se seu usuário já estiver cadastrado, você receberá um e-mail para criar sua primeira senha.'
-        : 'Se esse e-mail estiver cadastrado, você receberá um link para definir uma nova senha.'
-    )
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
+        redirectTo: recoveryRedirect(window.location.href),
+      })
+      if (error) { setErro(authErrorMessage(error)); return }
+      // Never reveal whether this account exists.
+      setMensagem('Se esse e-mail estiver cadastrado neste ambiente, você receberá um link para definir sua senha. Use somente o e-mail mais recente e não compartilhe o link.')
+    } catch {
+      setErro('Não foi possível enviar o link. Verifique sua conexão e tente novamente.')
+    } finally { setCarregando(false) }
   }
 
   const recuperacao = modo !== 'login'
@@ -86,7 +79,8 @@ export function Login({ mensagemInicial = '' }: { mensagemInicial?: string }) {
         className="login-card login-card-expanded"
         onSubmit={recuperacao ? enviarAcesso : entrar}
       >
-<div className="login-brand">
+        <div className="login-env-line"><span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span></div>
+        <div className="login-brand">
           <div className="brand-mark large">C</div>
           <div>
             <h1>ColorNet</h1>
