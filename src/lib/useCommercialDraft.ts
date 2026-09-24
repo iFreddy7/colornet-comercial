@@ -9,6 +9,7 @@ export function useCommercialDraft(key: string, data: CommercialDraft, hasConten
   const revision = useRef<string | null>(null)
   const blocked = useRef(false)
   const ignored = useRef<string | null>(null)
+  const submittedKey = useRef<string | null>(null)
   const serialized = JSON.stringify(data)
   const current = useRef({ data, serialized, hasContent, ready, pending, loaded })
   current.current = { data, serialized, hasContent, ready, pending, loaded }
@@ -45,6 +46,7 @@ export function useCommercialDraft(key: string, data: CommercialDraft, hasConten
 
   function clear() {
     blocked.current = true
+    submittedKey.current = current.current.data.idempotencyKey
     try {
       // Do not delete work saved by a different tab.
       const saved = parseDraft(localStorage.getItem(key))
@@ -56,13 +58,15 @@ export function useCommercialDraft(key: string, data: CommercialDraft, hasConten
     setStatus('')
   }
 
-  // After a successful submission, permit a new draft only once the form is empty.
+  // A new submission identity starts another draft even when currency/branch stay selected.
   useEffect(() => {
-    if (!hasContent && !pending && loaded) {
+    const nextDocument = submittedKey.current !== null && submittedKey.current !== data.idempotencyKey
+    if ((!hasContent || nextDocument) && !pending && loaded) {
       blocked.current = false
+      submittedKey.current = null
       ignored.current = serialized
     }
-  }, [hasContent, pending, loaded, serialized])
+  }, [hasContent, pending, loaded, serialized, data.idempotencyKey])
 
   async function restore() {
     if (!pending || busy) return
@@ -80,3 +84,4 @@ export function useCommercialDraft(key: string, data: CommercialDraft, hasConten
   }
   return { pending, busy, status, loaded, restore, discard, clear }
 }
+
