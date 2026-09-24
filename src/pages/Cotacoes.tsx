@@ -3,15 +3,15 @@ import { supabase } from '../lib/supabase'
 import type { UsuarioApp } from '../types'
 import type { DocumentoCotacao } from '../lib/cotacaoPdf'
 
-type Linha={id:string;numero:string;titulo:string;created_at:string;cliente_nome:string;vendedor_nome:string;moeda:string}
+type Linha={id:string;numero:string;titulo:string;created_at:string;cliente_nome:string;vendedor_nome:string;moeda:string;pedido_convertido_id:string|null}
 function dataBr(value?:string|null){if(!value)return '—';const m=String(value).slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}/${m[2]}/${m[1]}`:String(value)}
-export function Cotacoes({usuario}:{usuario:UsuarioApp}) {
+export function Cotacoes({usuario,onConverter}:{usuario:UsuarioApp;onConverter:(id:string)=>void}) {
  const [linhas,setLinhas]=useState<Linha[]>([]),[busca,setBusca]=useState(''),[cliente,setCliente]=useState(''),[vendedor,setVendedor]=useState('')
  const [pagina,setPagina]=useState(0),[total,setTotal]=useState(0),[erro,setErro]=useState(''),[carregando,setCarregando]=useState(true),[pdf,setPdf]=useState('')
  const [detalhe,setDetalhe]=useState<DocumentoCotacao|null>(null)
  const seq=useRef(0);const admin=usuario.perfil==='ADMIN'
  useEffect(()=>{const token=++seq.current;setCarregando(true);const timer=setTimeout(async()=>{
-  let q=supabase.from('cotacoes').select('id,numero,titulo,created_at,cliente_nome,vendedor_nome,moeda',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(pagina*25,pagina*25+24)
+  let q=supabase.from('cotacoes').select('id,numero,titulo,created_at,cliente_nome,vendedor_nome,moeda,pedido_convertido_id',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(pagina*25,pagina*25+24)
   const clean=(v:string)=>v.trim().replace(/[%_]/g,'')
   if(!admin)q=q.eq('created_by',usuario.id)
   if(clean(busca))q=q.ilike('titulo',`%${clean(busca)}%`)
@@ -30,7 +30,7 @@ export function Cotacoes({usuario}:{usuario:UsuarioApp}) {
  return <section className="page"><div className="page-header"><div><span className="eyebrow">COMERCIAL</span><h1>{admin?'Todas as Cotações / Listas':'Minhas Cotações / Listas'}</h1><p>{admin?'Consulte todos os vendedores e clientes.':'Consulte seus documentos e baixe o PDF para enviar ao cliente.'}</p></div></div>
  <div className="form-card form-grid"><div className="field"><label>Título</label><input value={busca} onChange={e=>{setBusca(e.target.value);setPagina(0)}} placeholder="Ex.: Setembro 2026" /></div><div className="field"><label>Cliente</label><input value={cliente} onChange={e=>{setCliente(e.target.value);setPagina(0)}} placeholder="Nome do cliente" /></div>{admin&&<div className="field"><label>Vendedor</label><input value={vendedor} onChange={e=>{setVendedor(e.target.value);setPagina(0)}} placeholder="Nome do vendedor" /></div>}</div>
  {erro&&<div className="alert error">{erro}</div>}
- <div className="form-card"><p>{carregando?'Carregando...':`${total} documento(s)`}</p><div className="table-scroll"><table><thead><tr><th>Título / Número</th><th>Cliente</th><th>Vendedor</th><th>Emissão</th><th>Ações</th></tr></thead><tbody>{linhas.map(l=><tr key={l.id}><td><strong>{l.titulo}</strong><small>{l.numero}</small></td><td>{l.cliente_nome}</td><td>{l.vendedor_nome}</td><td>{new Date(l.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</td><td><button className="secondary-button" disabled={!!pdf} onClick={()=>abrir(l.id,false)}>Ver itens</button>{' '}<button className="primary-button" disabled={!!pdf} onClick={()=>abrir(l.id,true)}>{pdf===l.id?'Abrindo...':'Baixar PDF'}</button></td></tr>)}{!carregando&&!linhas.length&&<tr><td colSpan={5}>Nenhuma cotação encontrada.</td></tr>}</tbody></table></div>
+ <div className="form-card"><p>{carregando?'Carregando...':`${total} documento(s)`}</p><div className="table-scroll"><table><thead><tr><th>Título / Número</th><th>Cliente</th><th>Vendedor</th><th>Emissão</th><th>Ações</th></tr></thead><tbody>{linhas.map(l=><tr key={l.id}><td><strong>{l.titulo}</strong><small>{l.numero}</small></td><td>{l.cliente_nome}</td><td>{l.vendedor_nome}</td><td>{new Date(l.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</td><td><button className="secondary-button" disabled={!!pdf} onClick={()=>abrir(l.id,false)}>Ver itens</button>{' '}<button className="primary-button" disabled={!!pdf} onClick={()=>abrir(l.id,true)}>{pdf===l.id?'Abrindo...':'Baixar PDF'}</button>{' '}<button className="secondary-button" disabled={!!pdf || !!l.pedido_convertido_id} onClick={()=>onConverter(l.id)}>{l.pedido_convertido_id?'Convertida em pedido':'Converter em pedido'}</button></td></tr>)}{!carregando&&!linhas.length&&<tr><td colSpan={5}>Nenhuma cotação encontrada.</td></tr>}</tbody></table></div>
  <button className="secondary-button" disabled={carregando||pagina===0} onClick={()=>setPagina(p=>p-1)}>Anterior</button>{' '}Página {pagina+1}{' '}<button className="secondary-button" disabled={carregando||(pagina+1)*25>=total} onClick={()=>setPagina(p=>p+1)}>Próxima</button></div>
  {detalhe&&<div className="form-card">
   <button className="secondary-button" onClick={()=>setDetalhe(null)}>Fechar detalhes</button>

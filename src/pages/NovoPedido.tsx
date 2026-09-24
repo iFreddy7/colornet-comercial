@@ -13,6 +13,9 @@ import type {
   UsuarioApp,
 } from '../types'
 import { Loading } from '../components/Loading'
+import { DraftNotice } from '../components/DraftNotice'
+import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
+import { useCommercialDraft } from '../lib/useCommercialDraft'
 
 type FilialRel = {
   id: string
@@ -202,7 +205,8 @@ export function NovoPedido({
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
+  const [draftKind] = useState(() => pedidoDuplicarId ? `pedido-copia-${pedidoDuplicarId}` : 'pedido')
   const [duplicando, setDuplicando] = useState(false)
 
   const produtoBuscaSeq = useRef(0)
@@ -210,6 +214,46 @@ export function NovoPedido({
   const disponibilidadeSeq = useRef(0)
 
   const admin = usuario.perfil === 'ADMIN'
+
+  async function restaurarRascunho(saved: CommercialDraft) {
+    let selected: Produto | null = null
+    if (saved.productId) {
+      const result = await supabase.from('produtos').select('id,codigo_protheus,nome,ncm,colour_index,grupo_tributario,status_fiscal,fiscal_pendencia,ativo,precos(*)').eq('id', saved.productId).eq('ativo', true).maybeSingle()
+      if (result.error) throw new Error('Não foi possível conferir o produto do rascunho. Tente novamente.')
+      selected = result.data as Produto | null
+    }
+    setTitulo(saved.fields.titulo || '')
+    setClienteBusca(saved.fields.clienteBusca || '')
+    setClienteId(saved.fields.clienteId || '')
+    setPrazoBusca(saved.fields.prazoBusca || '')
+    setPrazoId(saved.fields.prazoId || '')
+    setFreteId(saved.fields.freteId || '')
+    setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
+    setObservacoes(saved.fields.observacoes || '')
+    setProdutoBusca(saved.fields.produtoBusca || '')
+    setQuantidade(saved.fields.quantidade || '')
+    setPrecoNet(saved.fields.precoNet || '')
+    setEntradaPreco(saved.fields.entradaPreco === 'FINAL' ? 'FINAL' : 'NET')
+    setObservacaoPreco(saved.fields.observacaoPreco || '')
+    setFilialId(saved.fields.filialId || '')
+    setTransportadora(saved.fields.transportadora || '')
+    setDataEntrega(saved.fields.dataEntrega || '')
+    setObsTransporte(saved.fields.obsTransporte || '')
+    setPrecoFinalManual(saved.fields.precoFinalManual || '')
+    setFaixa(saved.fields.faixa || null)
+    setProduto(selected)
+    setItens(saved.items)
+    setIdempotencyKey(saved.idempotencyKey)
+    setCalculo(null)
+  }
+  const draft = useCommercialDraft(
+    draftKey(APP_ENV_LABEL, usuario.id, draftKind),
+    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, filialId, transportadora, dataEntrega, obsTransporte, precoFinalManual, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || transportadora || obsTransporte || dataEntrega || precoFinalManual || (filialId && filialId !== filiais[0]?.id)),
+    !carregandoBase && !duplicando && !pedidoDuplicarId, restaurarRascunho
+  )
+
   const clienteSelecionado = clientes.find((c) => c.id === clienteId) || null
   const preco = precoOf(produto)
   const filialSelecionada = filiais.find((f) => f.id === filialId) || null
@@ -576,11 +620,11 @@ export function NovoPedido({
     const novosItens: ItemPedidoLocal[] = []
     for (const item of (its.data ?? []) as any[]) {
       const produtoRel = Array.isArray(item.produtos) ? item.produtos[0] : item.produtos
-      const { data: calc, error: calcError } = await supabase.rpc('calcular_item_pedido', {
+      const { data: calc, error: calcError } = await supabase.rpc('calcular_preco_comercial', {
         p_cliente_id: pedido.cliente_id,
         p_produto_id: item.produto_id,
         p_filial_id: pedido.filial_id,
-        p_preco_net: Number(item.preco_net),
+        p_preco_net: Number(item.preco_net), p_preco_final: null, p_cotacao: false,
       })
       if (calcError) continue
       const result = calc as CalculoFiscal
@@ -626,466 +670,7 @@ export function NovoPedido({
 
     if (atual <= 0) return
 
-    fiscalSeq.current += 1
-    setCalculo(null)
-    setEntradaPreco('NET')
-    setPrecoFinalManual('')
-    setPrecoNet(atual.toFixed(4))
-    setFaixa(chave)
-  }
-
-  async function calcularFiscalAutomatico() {
-    const seq = ++fiscalSeq.current
-    setErro('')
-    if (!clienteId || (!cotacao && !filialId) || !produto || n(precoEntrada) <= 0) {
-      setCalculo(null); setCalculando(false); return null
-    }
-    setCalculando(true)
-    const { data, error } = await supabase.rpc('calcular_preco_comercial', {
-      p_cliente_id: clienteId, p_produto_id: produto.id,
-      p_filial_id: cotacao ? null : filialId,
-      p_preco_net: entradaPreco === 'NET' ? n(precoNet) : null,
-      p_preco_final: entradaPreco === 'FINAL' ? n(precoFinalManual) : null,
-      p_cotacao: cotacao,
-    }).then(r => r, () => ({ data: null, error: { message: 'Não foi possível calcular. Tente novamente.' } }))
-    if (seq !== fiscalSeq.current) return null
-    setCalculando(false)
-    if (error) { setErro(error.message); setCalculo(null); return null }
-    const result = data as CalculoFiscal
-    setCalculo(result)
-    if (result.automatico) {
-      if (entradaPreco === 'FINAL') setPrecoNet(n(result.preco_net).toFixed(4))
-      else setPrecoFinalManual(n(result.preco_final).toFixed(2))
-    }
-    return result
-  }
-
-  async function adicionarItem() {
-    if (adicionandoRef.current) return
-    adicionandoRef.current = true
-    try {
-    const result = await calcularFiscalAutomatico()
-    if (!result || !produto) return
-
-    const qtd = cotacao && !quantidade.trim() ? null : n(quantidade)
-    const net = result.automatico ? n(result.preco_net) : n(precoNet)
-
-    if (qtd !== null && qtd <= 0) {
-      setErro('Informe a quantidade.')
-      return
-    }
-
-    if (net <= 0) { setErro('Informe o preço NET. Cálculo inverso exige uma regra fiscal automática válida.'); return }
-    let final = n(result.preco_final)
-    let obs: string | null = null
-
-    if (!result.automatico) {
-      final = n(precoFinalManual)
-      obs = observacaoPreco.trim()
-
-      if (final <= 0) {
-        setErro('Este item é fiscal MANUAL. Informe o preço final.')
-        return
-      }
-
-      if (!obs) {
-        setErro('Informe a observação/aprovação do preço manual.')
-        return
-      }
-    }
-
-    const ipi = n(result.ipi)
-    const subtotal = Number((final * (qtd ?? 0)).toFixed(2))
-    const valorIpi = Number((subtotal * ipi).toFixed(2))
-    const total = Number((subtotal + valorIpi).toFixed(2))
-
-    const novo: ItemPedidoLocal = {
-      idLocal: idLocal(),
-      produto_id: produto.id,
-      codigo: produto.codigo_protheus,
-      produto: produto.nome,
-      ncm: result.ncm ?? produto.ncm,
-      colour_index: result.colour_index ?? produto.colour_index,
-      filial_origem_id: result.filial_origem_id ?? null,
-      entrada_preco: entradaPreco,
-      quantidade: qtd,
-      preco_net: net,
-      preco_final: final,
-      aliquota_icms:
-        result.aliquota == null ? null : n(result.aliquota),
-      divisor_icms:
-        result.divisor == null ? null : n(result.divisor),
-      ipi,
-      valor_ipi: valorIpi,
-      subtotal,
-      total_item: total,
-      modo_fiscal: result.automatico ? 'AUTOMATICO' : 'MANUAL',
-      regra_icms: result.regra || null,
-      motivo_fiscal: result.motivo || null,
-      faixa_interna: faixa,
-      observacao_preco: obs,
-    }
-
-    setItens((atual) => [...atual, novo])
-    disponibilidadeSeq.current += 1
-    setProduto(null)
-    setProdutoBusca('')
-    setQuantidade('')
-    setEntradaPreco('NET')
-    setPrecoFinalManual('')
-    setPrecoNet('')
-    setFaixa(null)
-    setCalculo(null)
-    setPrecoFinalManual('')
-    setObservacaoPreco('')
-    setEstoque([])
-    setPrevisoes([])
-    setCarregandoDisponibilidade(false)
-    setErro('')
-    } finally { adicionandoRef.current = false }
-  }
-
-  function excluirItem(id: string) {
-    if (!window.confirm('Excluir este produto?')) return
-    setItens((atual) => atual.filter((item) => item.idLocal !== id))
-  }
-
-  const totais = useMemo(() => {
-    return itens.reduce(
-      (acc, item) => {
-        acc.subtotal += item.subtotal
-        acc.ipi += item.valor_ipi
-        acc.total += item.total_item
-        return acc
-      },
-      { subtotal: 0, ipi: 0, total: 0 }
-    )
-  }, [itens])
-
-  async function salvarPedido() {
-    if (salvando || envioRef.current) return
-    if (cotacao && !titulo.trim()) { setErro('Informe o título da cotação/lista de preço.'); return }
-    setErro('')
-    setSucesso('')
-    setAvisoEmail('')
-
-    if (!clienteId || (!cotacao && !filialId)) {
-      setErro(cotacao ? 'Cliente obrigatório.' : 'Cliente e filial são obrigatórios.')
-      return
-    }
-
-    if (!itens.length) {
-      setErro('Adicione pelo menos um produto.')
-      return
-    }
-
-    envioRef.current = true
-    setSalvando(true)
-
-    const cabecalho = {
-      titulo: titulo.trim(),
-      cliente_id: clienteId,
-      filial_id: cotacao ? null : filialId,
-      moeda,
-      prazo_pagamento_id: prazoId || null,
-      frete_id: freteId || null,
-      vendedor_id: vendedorIdAdmin || null,
-      transportadora: transportadora.trim() || null,
-      data_entrega: dataEntrega || null,
-      observacoes_transporte: obsTransporte.trim() || null,
-      observacoes: observacoes.trim() || null,
-    }
-
-    const payloadItens = itens.map((item) => ({
-      produto_id: item.produto_id,
-      quantidade: item.quantidade,
-      preco_net: item.preco_net,
-      preco_final: item.preco_final,
-      entrada_preco: item.entrada_preco || 'NET',
-      ...(cotacao ? { calculo_confirmado: { automatico: item.modo_fiscal === 'AUTOMATICO', filial_origem_id: item.filial_origem_id ?? null, preco_net: item.preco_net, preco_final: item.preco_final, divisor: item.divisor_icms } } : {}),
-      preco_final_manual:
-        item.modo_fiscal === 'MANUAL' ? item.preco_final : null,
-      observacao_preco: item.observacao_preco,
-      faixa_interna: item.faixa_interna,
-    }))
-
-    const { data, error } = await supabase.rpc(cotacao ? 'criar_cotacao_v2' : 'criar_pedido_v4', {
-      p_cabecalho: cabecalho,
-      p_itens: payloadItens,
-      p_idempotency_key: idempotencyKey,
-    }).then(r => r, () => ({ data: null, error: { message: 'Falha de conexão. Tente novamente; o envio não será duplicado.' } }))
-
-    if (error) {
-      envioRef.current = false
-      setSalvando(false)
-      setErro(error.message)
-      return
-    }
-
-    if (cotacao) {
-      envioRef.current = false
-      setSalvando(false)
-      setSucesso(`${data.numero} salva. Acesse Cotações / Listas para baixar o PDF.`)
-      setItens([]); setTitulo(''); setObservacoes(''); setIdempotencyKey(crypto.randomUUID())
-      onPedidoCriado()
-      return
-    }
-
-    const resposta = data as CriarPedidoResposta
-    const numero = resposta?.numero || 'Pedido'
-    const reserva = resposta?.estoque
-    const reservaPrevisao = resposta?.previsao
-
-    const reservadoImediato = reserva?.quantidade_reservada == null
-      ? (reserva?.alocacoes ?? []).reduce((total, alocacao) => total + n(alocacao.quantidade_reservada), 0)
-      : n(reserva.quantidade_reservada)
-    const reservadoFuturo = n(reservaPrevisao?.quantidade_reservada)
-    const semCobertura = n(reservaPrevisao?.sem_cobertura)
-
-    let mensagem = `${numero} gravado com sucesso.`
-
-    if (reserva) {
-      mensagem += ` Reserva imediata: ${quantidadeBr(reservadoImediato)} KG.`
-    }
-
-    if (reservaPrevisao && n(reservaPrevisao.quantidade_necessaria) > 0) {
-      mensagem += ` Reserva futura: ${quantidadeBr(reservadoFuturo)} KG.`
-
-      if (reservaPrevisao.data_cobertura) {
-        mensagem += ` Cobertura prevista até ${dataBr(
-          reservaPrevisao.data_cobertura
-        )}.`
-      }
-
-      if (semCobertura > 0) {
-        mensagem += ` Ainda sem cobertura: ${quantidadeBr(semCobertura)} KG.`
-      }
-    }
-
-    setSucesso(mensagem)
-
-    if (resposta?.pedido_id) {
-      if (IS_PRODUCTION) {
-        const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
-          body: { pedido_id: resposta.pedido_id },
-        })
-        if (emailError) {
-          setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
-        }
-      } else {
-        setAvisoEmail('HOMOLOGAÇÃO: pedido salvo sem envio de e-mail real.')
-      }
-    }
-
-    envioRef.current = false
-    setSalvando(false)
-
-    setItens([])
-    setClienteId('')
-    setClienteBusca('')
-    setPrazoId('')
-    setPrazoBusca('')
-    setFreteId('')
-    setTransportadora('')
-    setDataEntrega('')
-    setObsTransporte('')
-    setObservacoes('')
-    setVendedorIdAdmin('')
-    setIdempotencyKey(crypto.randomUUID())
-
-    onPedidoCriado()
-  }
-
-  if (carregandoBase || duplicando) {
-    return (
-      <section className="page">
-        <Loading texto={duplicando ? "Duplicando pedido e recalculando fiscal..." : "Preparando Novo Pedido..."} />
-      </section>
-    )
-  }
-
-  return (
-    <section className="page">
-      <div className="page-header">
-        <div>
-          <span className="eyebrow">{cotacao ? 'NOVA COTAÇÃO' : 'NOVO PEDIDO'} • {APP_ENV_LABEL}</span>
-          <h1>{cotacao ? 'Nova Cotação / Lista de Preço' : 'Novo Pedido'}</h1>
-          <p>
-            Cliente é filtrado pelo banco. O cálculo fiscal e a gravação final
-            são novamente validados no PostgreSQL.
-          </p>
-        </div>
-
-        <div className="status-pill">
-          <span className="status-dot" />
-          Validação server-side
-        </div>
-      </div>
-
-      {erro && <div className="alert error">{erro}</div>}
-      {sucesso && <div className="alert success">{sucesso}</div>}
-      {avisoEmail && <div className="alert warning-box">{avisoEmail}</div>}
-
-      <div className="form-card">
-        <div className="section-title">
-          <span>1</span>
-          <div>
-            <strong>Dados comerciais</strong>
-            <small>{cotacao ? 'Título, cliente e moeda. A origem de cada produto segue o maior saldo disponível. Para trocar cliente ou moeda, remova os itens primeiro.' : 'Cliente, faturamento e entrega.'}</small>
-          </div>
-        </div>
-
-        <div className="form-grid">
-          {cotacao && <div className="field field-wide"><label>Título da cotação / lista de preço *</label><input maxLength={180} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Lista de preço cliente X - Setembro 2026" /></div>}
-          <div className="field field-wide autocomplete-wrap">
-            <label>Cliente *</label>
-            <input
-              value={clienteBusca}
-              disabled={cotacao && itens.length > 0}
-              onChange={(e) => {
-                setClienteBusca(e.target.value)
-                setClienteId('')
-              }}
-              placeholder={admin ? 'Pesquise qualquer cliente...' : 'Pesquise sua carteira...'}
-            />
-
-            {clienteBusca && !clienteId && (
-              <div className="autocomplete">
-                {clientesFiltrados.map((cliente) => (
-                  <button
-                    type="button"
-                    key={cliente.id}
-                    onClick={() => selecionarCliente(cliente)}
-                  >
-                    <strong>{cliente.codigo} — {cliente.razao_social}</strong>
-                    <span>{[cliente.municipio, cliente.uf].filter(Boolean).join(' / ')}</span>
-                  </button>
-                ))}
-
-                {!clientesFiltrados.length && (
-                  <div className="autocomplete-empty">
-                    Nenhum cliente disponível para seu acesso.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {clienteSelecionado && (
-              <small className="field-help">
-                {clienteSelecionado.codigo} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
-              </small>
-            )}
-          </div>
-
-          {!cotacao && <>
-          <div className="field">
-            <label>Filial *</label>
-            <select disabled={cotacao && itens.length > 0} value={filialId} onChange={(e) => setFilialId(e.target.value)}>
-              <option value="">Selecione</option>
-              {filiais.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nome} — {f.uf}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          </>}
-          <div className="field">
-            <label>Moeda *</label>
-            <select disabled={cotacao && itens.length > 0} value={moeda} onChange={(e) => setMoeda(e.target.value as Moeda)}>
-              <option value="USD">US$ — Dólar</option>
-              <option value="BRL" disabled={ptax <= 0}>
-                R$ — Real {ptax <= 0 ? '(PTAX indisponível)' : ''}
-              </option>
-            </select>
-            {ptax > 0 && (
-              <small className="field-help">PTAX disponível: R$ {ptax.toFixed(4)}</small>
-            )}
-          </div>
-
-          {!cotacao && <>
-          <div className="field autocomplete-wrap">
-            <label>Prazo de pagamento</label>
-            <input
-              value={prazoBusca}
-              onChange={(e) => {
-                setPrazoBusca(e.target.value)
-                setPrazoId('')
-              }}
-              placeholder="Digite código ou descrição..."
-            />
-
-            {prazoBusca && !prazoId && (
-              <div className="autocomplete">
-                {prazosFiltrados.map((p) => (
-                  <button
-                    type="button"
-                    key={p.id}
-                    onClick={() => {
-                      setPrazoId(p.id)
-                      setPrazoBusca(p.descricao)
-                    }}
-                  >
-                    <strong>{p.descricao}</strong>
-                    {p.codigo && <span>Código {p.codigo}</span>}
-                  </button>
-                ))}
-
-                {!prazosFiltrados.length && (
-                  <div className="autocomplete-empty">
-                    Nenhum prazo encontrado.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {prazoSelecionado && (
-              <small className="field-help">
-                Selecionado: {prazoSelecionado.descricao}
-              </small>
-            )}
-          </div>
-
-          <div className="field">
-            <label>Frete</label>
-            <select value={freteId} onChange={(e) => setFreteId(e.target.value)}>
-              <option value="">Selecione</option>
-              {fretes.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.descricao}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          </>}
-          {admin && clienteSelecionado?.vendedor_id == null && (
-            <div className="field">
-              <label>Vendedor *</label>
-              <select
-                value={vendedorIdAdmin}
-                onChange={(e) => setVendedorIdAdmin(e.target.value)}
-              >
-                <option value="">Selecione</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {!cotacao && <>
-          <div className="field">
-            <label>Data de entrega</label>
-            <input
-              type="date"
-              value={dataEntrega}
-              onChange={(e) => setDataEntrega(e.target.value)}
-            />
-          </div>
+    >
 
           <div className="field">
             <label>Transportadora</label>

@@ -13,6 +13,7 @@ import { NovoPedido } from './pages/NovoPedido'
 import { NovaCotacaoV2 } from './pages/NovaCotacaoV2'
 import { Pedidos } from './pages/Pedidos'
 import { Cotacoes } from './pages/Cotacoes'
+import { ConverterCotacao } from './pages/ConverterCotacao'
 import { Admin } from './pages/Admin'
 import { startsRecovery, cleanRecoveryUrl, clearRecovery } from './lib/recoveryContext'
 
@@ -25,6 +26,8 @@ function App() {
   const [refreshPedidos, setRefreshPedidos] = useState(0)
   const [refreshCotacoes, setRefreshCotacoes] = useState(0)
   const [pedidoDuplicarId, setPedidoDuplicarId] = useState<string | null>(null)
+  const [cotacaoConverterId, setCotacaoConverterId] = useState<string | null>(null)
+  const [pedidoSession, setPedidoSession] = useState(0)
   const [recuperandoSenha, setRecuperandoSenha] = useState(startsRecovery)
   const [solicitarRecuperacao, setSolicitarRecuperacao] = useState(false)
   const [mensagemLogin, setMensagemLogin] = useState('')
@@ -64,7 +67,9 @@ function App() {
   async function sair() { await supabase.auth.signOut() }
   function pedidoCriado() { setRefreshPedidos((v) => v + 1) }
   function cotacaoCriada() { setRefreshCotacoes((v) => v + 1) }
-  function duplicarPedido(id: string) { setPedidoDuplicarId(id); setTela('novo-pedido') }
+  function navegar(destino: Tela) { setPedidoDuplicarId(null); setCotacaoConverterId(null); setPedidoSession(v => v + 1); setTela(destino) }
+  function duplicarPedido(id: string) { setCotacaoConverterId(null); setPedidoDuplicarId(id); setPedidoSession(v => v + 1); setTela('novo-pedido') }
+  function converterCotacao(id: string) { setPedidoDuplicarId(null); setCotacaoConverterId(id); setTela('novo-pedido') }
   function senhaConcluida() { clearRecovery(); cleanRecoveryUrl(); setRecuperandoSenha(false); setSession(null); setUsuario(null); setSolicitarRecuperacao(false); setMensagemLogin('Senha criada com sucesso. Agora entre com sua nova senha.') }
   async function solicitarNovoLink() {
     await supabase.auth.signOut({ scope: 'local' })
@@ -76,12 +81,14 @@ function App() {
   if (!session) return <Login mensagemInicial={mensagemLogin} recuperar={solicitarRecuperacao} />
   if (!usuario) return <div className="fullscreen-center error-screen"><div className="alert error">{erro || 'Perfil não encontrado.'}</div><button className="primary-button" onClick={sair}>Voltar ao login</button></div>
 
-  return <Layout usuario={usuario} tela={tela} setTela={setTela} onSair={sair}>
+  return <Layout usuario={usuario} tela={tela} setTela={navegar} onSair={sair}>
     {tela === 'inicio' && <Home key={`home-${refreshPedidos}-${refreshCotacoes}`} usuario={usuario} />}
-    {tela === 'novo-pedido' && <NovoPedido usuario={usuario} onPedidoCriado={pedidoCriado} pedidoDuplicarId={pedidoDuplicarId} onDuplicacaoCarregada={() => setPedidoDuplicarId(null)} />}
+    {tela === 'novo-pedido' && (cotacaoConverterId
+      ? <ConverterCotacao key={`${usuario.id}-${cotacaoConverterId}`} id={cotacaoConverterId} usuario={usuario} onVoltar={() => navegar('cotacoes')} onCriado={() => { pedidoCriado(); cotacaoCriada() }} />
+      : <NovoPedido key={`${usuario.id}-${pedidoSession}`} usuario={usuario} onPedidoCriado={pedidoCriado} pedidoDuplicarId={pedidoDuplicarId} onDuplicacaoCarregada={() => setPedidoDuplicarId(null)} />)}
     {tela === 'pedidos' && <Pedidos key={`pedidos-${refreshPedidos}`} usuario={usuario} onDuplicar={duplicarPedido} />}
-    {tela === 'nova-cotacao' && <NovaCotacaoV2 key={`nova-cotacao-${refreshCotacoes}`} usuario={usuario} onCotacaoCriada={cotacaoCriada} />}
-    {tela === 'cotacoes' && <Cotacoes key={`cotacoes-${refreshCotacoes}`} usuario={usuario} />}
+    {tela === 'nova-cotacao' && <NovaCotacaoV2 key={`nova-cotacao-${usuario.id}-${refreshCotacoes}`} usuario={usuario} onCotacaoCriada={cotacaoCriada} />}
+    {tela === 'cotacoes' && <Cotacoes key={`cotacoes-${refreshCotacoes}`} usuario={usuario} onConverter={converterCotacao} />}
     {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}

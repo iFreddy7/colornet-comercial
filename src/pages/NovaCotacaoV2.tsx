@@ -13,6 +13,9 @@ import type {
   UsuarioApp,
 } from '../types'
 import { Loading } from '../components/Loading'
+import { DraftNotice } from '../components/DraftNotice'
+import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
+import { useCommercialDraft } from '../lib/useCommercialDraft'
 
 function n(value: unknown) {
   const numero = Number(value)
@@ -91,12 +94,49 @@ export function NovaCotacaoV2({
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
 
   const buscaSeq = useRef(0)
   const fiscalSeq = useRef(0)
   const envioRef = useRef(false)
   const adicionandoRef = useRef(false)
+
+
+  async function restaurarRascunho(saved: CommercialDraft) {
+    let selected: Produto | null = null
+    if (saved.productId) {
+      const result = await supabase.from('produtos').select('id,codigo_protheus,nome,ncm,colour_index,grupo_tributario,status_fiscal,fiscal_pendencia,ativo,precos(*)').eq('id', saved.productId).eq('ativo', true).maybeSingle()
+      if (result.error) throw new Error('Não foi possível conferir o produto do rascunho. Tente novamente.')
+      selected = result.data as Produto | null
+    }
+    setTitulo(saved.fields.titulo || '')
+    setClienteBusca(saved.fields.clienteBusca || '')
+    setClienteId(saved.fields.clienteId || '')
+    setPrazoBusca(saved.fields.prazoBusca || '')
+    setPrazoId(saved.fields.prazoId || '')
+    setFreteId(saved.fields.freteId || '')
+    setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
+    setObservacoes(saved.fields.observacoes || '')
+    setProdutoBusca(saved.fields.produtoBusca || '')
+    setQuantidade(saved.fields.quantidade || '')
+    setPrecoNet(saved.fields.precoNet || '')
+    setEntradaPreco(saved.fields.entradaPreco === 'FINAL' ? 'FINAL' : 'NET')
+    setObservacaoPreco(saved.fields.observacaoPreco || '')
+    setValidade(saved.fields.validade || '')
+    setPrecoFinal(saved.fields.precoFinal || '')
+    setFaixa(saved.fields.faixa || null)
+    setProduto(selected)
+    setItens(saved.items)
+    setIdempotencyKey(saved.idempotencyKey)
+    setCalculo(null)
+  }
+  const draft = useCommercialDraft(
+    draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
+    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
+    !carregando, restaurarRascunho
+  )
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId) || null
   const prazoSelecionado = prazos.find((p) => p.id === prazoId) || null
@@ -511,6 +551,7 @@ export function NovaCotacaoV2({
         : `${numero} salva com sucesso.`
     )
 
+    draft.clear()
     setTitulo('')
     setValidade(dataIsoMaisDias(7))
     setClienteBusca('')
@@ -537,8 +578,11 @@ export function NovaCotacaoV2({
     )
   }
 
+  if (draft.pending) return <section className="page"><h1>Nova Cotação</h1><DraftNotice draft={draft} /></section>
+
   return (
     <section className="page">
+      <DraftNotice draft={draft} />
       <div className="page-header">
         <div>
           <span className="eyebrow">NOVA COTAÇÃO • {APP_ENV_LABEL}</span>
