@@ -8,7 +8,7 @@ import { Loading } from '../components/Loading'
 import type { CalculoFiscal, Filial, OpcaoCadastro, UsuarioApp } from '../types'
 
 type QuoteItem = { produto_id: string; produto: string; codigo: string; quantidade: number | null; preco_net: number; preco_final: number; observacao_preco?: string }
-type Quote = { id: string; numero: string; cliente_id: string; cliente_nome: string; moeda: 'USD' | 'BRL'; validade: string | null; prazo_pagamento_id: string | null; frete_id: string | null; observacoes: string | null; pedido_convertido_id: string | null; documento: { itens: QuoteItem[] } }
+type Quote = { aprovacao_status: string; id: string; numero: string; cliente_id: string; cliente_nome: string; moeda: 'USD' | 'BRL'; validade: string | null; prazo_pagamento_id: string | null; frete_id: string | null; observacoes: string | null; pedido_convertido_id: string | null; documento: { itens: QuoteItem[] } }
 type Review = { automatico: boolean; preco_net: number; preco_final: number; ipi: number; divisor: number | null; disponivel: number; total: number }
 const money = (value: number, currency: string, digits = 2) => value.toLocaleString('pt-BR', { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
@@ -45,7 +45,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   useEffect(() => {
     let active = true
     void Promise.all([
-      supabase.from('cotacoes').select('id,numero,cliente_id,cliente_nome,moeda,validade,prazo_pagamento_id,frete_id,observacoes,pedido_convertido_id,documento').eq('id', id).single(),
+      supabase.from('cotacoes').select('id,numero,cliente_id,cliente_nome,moeda,validade,prazo_pagamento_id,frete_id,observacoes,pedido_convertido_id,aprovacao_status,documento').eq('id', id).single(),
       supabase.from('filiais').select('id,codigo,nome,uf').eq('ativo', true).order('nome'),
       supabase.from('prazos_pagamento').select('id,codigo,descricao').eq('ativo', true).order('descricao'),
       supabase.from('fretes').select('id,codigo,descricao').eq('ativo', true).order('descricao'),
@@ -74,7 +74,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   const draft = useCommercialDraft(draftKey(APP_ENV_LABEL, usuario.id, `converter-${id}`), {
     fields: { filialId, prazoId, freteId, observacoes, transportadora, dataEntrega, quantidades: JSON.stringify(quantidades), finais: JSON.stringify(finais), aprovacoes: JSON.stringify(aprovacoes) },
     items: [], productId: null, idempotencyKey: id,
-  }, Boolean(quote && (filialId || transportadora || dataEntrega || observacoes !== (quote.observacoes || '') || prazoId !== (quote.prazo_pagamento_id || '') || freteId !== (quote.frete_id || '') || quantidades.some((v,i) => v !== (quote.documento.itens[i]?.quantidade == null ? '' : String(quote.documento.itens[i]?.quantidade))) || finais.some((v,i) => v !== String(quote.documento.itens[i]?.preco_final)) || aprovacoes.some((v,i) => v !== (quote.documento.itens[i]?.observacao_preco || '')))), !loading && Boolean(quote) && !quote?.pedido_convertido_id && !sucesso, restore)
+  }, Boolean(quote && (filialId || transportadora || dataEntrega || observacoes !== (quote.observacoes || '') || prazoId !== (quote.prazo_pagamento_id || '') || freteId !== (quote.frete_id || '') || quantidades.some((v,i) => v !== (quote.documento.itens[i]?.quantidade == null ? '' : String(quote.documento.itens[i]?.quantidade))) || finais.some((v,i) => v !== String(quote.documento.itens[i]?.preco_final)) || aprovacoes.some((v,i) => v !== (quote.documento.itens[i]?.observacao_preco || '')))), !loading && Boolean(quote) && !quote?.pedido_convertido_id && quote?.aprovacao_status === 'APROVADA' && !sucesso, restore)
 
   async function recalcular() {
     if (!quote || busy) return
@@ -132,6 +132,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   if (loading) return <Loading texto="Carregando cotação para revisão..." />
   if (!quote) return <section className="page"><div className="alert error">{erro}</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (quote.pedido_convertido_id || sucesso) return <section className="page"><h1>Conversão da cotação</h1><div className="alert success">{sucesso || 'Esta cotação já foi convertida. Consulte o pedido vinculado no histórico de Pedidos.'}</div>{aviso && <div className="alert warning-box">{aviso}</div>}<button className="primary-button" onClick={onVoltar}>Voltar às cotações</button></section>
+  if (quote.aprovacao_status !== 'APROVADA') return <section className="page"><div className="alert warning-box">Esta cotação precisa ser aprovada por Gerente ou Diretor antes de virar pedido. Consulte a avaliação nas cotações.</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (!quote.validade || quote.validade < today()) return <section className="page"><div className="alert warning-box">Esta cotação venceu ou não possui validade. Emita uma nova proposta com as condições atualizadas.</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (draft.pending) return <section className="page"><h1>Converter {quote.numero}</h1><DraftNotice draft={draft} /><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   const update = (setter: typeof setQuantidades, index: number, value: string) => { setter(a => a.map((v, i) => i === index ? value : v)); setConfirmado(false) }

@@ -24,12 +24,25 @@ insert into filiais values('${id(5)}',true);insert into prazos_pagamento values(
 const migration = await readFile(new URL('../supabase/migrations/20260924121003_converter_cotacao_pedido.sql',import.meta.url),'utf8')
 await db.exec(migration)
 await db.exec(await readFile(new URL('../supabase/migrations/20260925134514_gestao_comercial_conversao_cotacao.sql',import.meta.url),'utf8'))
+await db.exec("alter table cotacoes add column aprovacao_status text not null default 'APROVADA'")
+await db.exec(await readFile(new URL('../supabase/migrations/20260925150446_exigir_aprovacao_conversao.sql',import.meta.url),'utf8'))
 const header={cliente_id:id(10),moeda:'USD',filial_id:id(5),prazo_pagamento_id:id(6),frete_id:id(7)}
 const item=(manual=false)=>({produto_id:id(manual?9:8),quantidade:25,preco_final_manual:31.25,observacao_preco:manual?'Aprovado':'',calculo_confirmado:{automatico:!manual,preco_net:25,preco_final:31.25,ipi:0.065,divisor:manual?null:0.8}})
 async function actor(n=1,role='authenticated'){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id(n)]);await db.exec(`set role ${role}`)}
-async function quote(n:number,manual=false,days=7){await db.exec('reset role');await db.query("insert into cotacoes values($1,'COT-TESTE',$2,$3,$4,'USD',current_date+$5::integer,$6)",[id(n),id(1),id(10),id(11),days,JSON.stringify({itens:[{produto_id:id(manual?9:8),preco_net:25,quantidade:null}]})]);await actor()}
+async function quote(n:number,manual=false,days=7){await db.exec('reset role');await db.query("insert into cotacoes(id,numero,created_by,cliente_id,vendedor_id,moeda,validade,documento) values($1,'COT-TESTE',$2,$3,$4,'USD',current_date+$5::integer,$6)",[id(n),id(1),id(10),id(11),days,JSON.stringify({itens:[{produto_id:id(manual?9:8),preco_net:25,quantidade:null}]})]);await actor()}
 async function convert(n:number,items:unknown[]=[item()],cab=header){return (await db.query<{r:any}>('select public.converter_cotacao_pedido($1,$2,$3) r',[id(n),JSON.stringify(cab),JSON.stringify(items)])).rows[0].r}
 test('Invocação autenticada funciona sem acesso ao schema privado e não altera a proposta',async()=>{await quote(20);const result=await convert(20);await db.exec('reset role');const q=(await db.query<any>('select * from cotacoes where id=$1',[id(20)])).rows[0];assert.equal(q.pedido_convertido_id,result.pedido_id);assert.equal(q.documento.itens[0].quantidade,null);const p=(await db.query<any>('select * from pedidos where id=$1',[result.pedido_id])).rows[0];assert.equal(p.items[0].preco_net,25);assert.equal(p.items[0].quantidade,25)})
+test('Pendentes e reprovadas não geram pedido nem reserva, mesmo com chamada direta por Admin',async()=>{
+  await quote(28)
+  for(const status of ['PENDENTE','REPROVADA']) {
+    await db.exec('reset role');await db.query('update cotacoes set aprovacao_status=$1 where id=$2',[status,id(28)])
+    const antes=(await db.query<any>('select count(*)::int n from pedidos')).rows[0].n
+    await actor(3);await assert.rejects(()=>convert(28),/precisa ser aprovada/)
+    await db.exec('reset role');assert.equal((await db.query<any>('select count(*)::int n from pedidos')).rows[0].n,antes)
+    assert.equal((await db.query<any>('select count(*)::int n from pedido_idempotencia where chave=$1',[id(28)])).rows[0].n,0)
+  }
+  await db.query("update cotacoes set aprovacao_status='APROVADA' where id=$1",[id(28)]);await actor();assert.ok((await convert(28)).pedido_id)
+})
 test('Gerente e Diretor convertem propostas de outro vendedor, mas inativos não',async()=>{
   for (const [n,perfil] of [[30,'GERENTE'],[31,'DIRETOR']] as const) {
     await quote(n); await db.exec('reset role')

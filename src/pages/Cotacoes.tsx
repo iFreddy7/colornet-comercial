@@ -3,39 +3,48 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { UsuarioApp } from '../types'
 import type { DocumentoCotacao } from '../lib/cotacaoPdf'
+import { AvaliacaoCotacao } from '../components/AvaliacaoCotacao'
+import { situacoesCotacao, type Avaliacao } from '../lib/aprovacaoCotacao'
 
-type Linha={id:string;numero:string;titulo:string;created_at:string;cliente_nome:string;vendedor_nome:string;moeda:string;pedido_convertido_id:string|null}
+type Linha=Avaliacao & {titulo:string;created_at:string;cliente_nome:string;vendedor_nome:string;moeda:string}
+const campos='id,numero,titulo,created_at,cliente_nome,vendedor_nome,moeda,pedido_convertido_id,aprovacao_status,aprovacao_motivo,aprovacao_nome,aprovacao_em,aviso_status'
 function dataBr(value?:string|null){if(!value)return '—';const m=String(value).slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}/${m[2]}/${m[1]}`:String(value)}
 export function Cotacoes({usuario,onConverter}:{usuario:UsuarioApp;onConverter:(id:string)=>void}) {
  const [linhas,setLinhas]=useState<Linha[]>([]),[busca,setBusca]=useState(''),[cliente,setCliente]=useState(''),[vendedor,setVendedor]=useState('')
  const [pagina,setPagina]=useState(0),[total,setTotal]=useState(0),[erro,setErro]=useState(''),[carregando,setCarregando]=useState(true),[pdf,setPdf]=useState('')
  const [detalhe,setDetalhe]=useState<DocumentoCotacao|null>(null)
+ const [selecionada,setSelecionada]=useState<Linha|null>(null),[situacao,setSituacao]=useState(''),[revisao,setRevisao]=useState(0)
+ const detalheRef=useRef<HTMLDivElement>(null)
+ useEffect(()=>{if(selecionada?.id){detalheRef.current?.focus({preventScroll:true});detalheRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}},[selecionada?.id])
  const seq=useRef(0);const visaoComercial=temVisaoComercial(usuario)
  useEffect(()=>{const token=++seq.current;setCarregando(true);const timer=setTimeout(async()=>{
-  let q=supabase.from('cotacoes').select('id,numero,titulo,created_at,cliente_nome,vendedor_nome,moeda,pedido_convertido_id',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(pagina*25,pagina*25+24)
+  let q=supabase.from('cotacoes').select(campos,{count:'exact'}).order('created_at',{ascending:false}).order('id').range(pagina*25,pagina*25+24)
   const clean=(v:string)=>v.trim().replace(/[%_]/g,'')
   if(!visaoComercial)q=q.eq('created_by',usuario.id)
+  if(situacao)q=q.eq('aprovacao_status',situacao)
   if(clean(busca))q=q.ilike('titulo',`%${clean(busca)}%`)
   if(clean(cliente))q=q.ilike('cliente_nome',`%${clean(cliente)}%`)
   if(visaoComercial&&clean(vendedor))q=q.ilike('vendedor_nome',`%${clean(vendedor)}%`)
   const {data,error,count}=await q
   if(token!==seq.current)return
   setErro(error?.message||'');setLinhas((data||[]) as Linha[]);setTotal(count||0);setCarregando(false)
- },250);return()=>{clearTimeout(timer);seq.current++}},[busca,cliente,vendedor,pagina,visaoComercial,usuario.id])
+ },250);return()=>{clearTimeout(timer);seq.current++}},[busca,cliente,vendedor,pagina,visaoComercial,usuario.id,situacao,revisao])
  async function abrir(id:string,baixar:boolean){if(pdf)return;setPdf(id);setErro('');try{
-  const {data,error}=await supabase.from('cotacoes').select('documento').eq('id',id).single();if(error)throw error
+  const {data,error}=await supabase.from('cotacoes').select(`${campos},documento`).eq('id',id).single();if(error)throw new Error(error.message)
   const d=data.documento as DocumentoCotacao
-  if(baixar){const {baixarPdfCotacao}=await import('../lib/cotacaoPdf');baixarPdfCotacao(d)}else setDetalhe(d)
+  if(baixar){const {baixarPdfCotacao}=await import('../lib/cotacaoPdf');baixarPdfCotacao(d)}else {setDetalhe(d);setSelecionada(data as unknown as Linha)}
  }catch(e){setErro(e instanceof Error?e.message:'Não foi possível abrir a cotação.')}finally{setPdf('')}}
+ async function atualizar(){if(selecionada)await abrir(selecionada.id,false);setRevisao(r=>r+1)}
  const moeda=(n:number,m:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:m}).format(n)
  return <section className="page"><div className="page-header"><div><span className="eyebrow">COMERCIAL</span><h1>{visaoComercial?'Todas as Cotações / Listas':'Minhas Cotações / Listas'}</h1><p>{visaoComercial?'Consulte todos os vendedores e clientes.':'Consulte seus documentos e baixe o PDF para enviar ao cliente.'}</p></div></div>
- <div className="form-card form-grid"><div className="field"><label>Título</label><input value={busca} onChange={e=>{setBusca(e.target.value);setPagina(0)}} placeholder="Ex.: Setembro 2026" /></div><div className="field"><label>Cliente</label><input value={cliente} onChange={e=>{setCliente(e.target.value);setPagina(0)}} placeholder="Nome do cliente" /></div>{visaoComercial&&<div className="field"><label>Vendedor</label><input value={vendedor} onChange={e=>{setVendedor(e.target.value);setPagina(0)}} placeholder="Nome do vendedor" /></div>}</div>
+ <div className="form-card form-grid"><div className="field"><label htmlFor="cot-situacao">Situação</label><select id="cot-situacao" value={situacao} onChange={e=>{setSituacao(e.target.value);setPagina(0)}}><option value="">Todas as situações</option>{Object.entries(situacoesCotacao).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div><div className="field"><label>Título</label><input value={busca} onChange={e=>{setBusca(e.target.value);setPagina(0)}} placeholder="Ex.: Setembro 2026" /></div><div className="field"><label>Cliente</label><input value={cliente} onChange={e=>{setCliente(e.target.value);setPagina(0)}} placeholder="Nome do cliente" /></div>{visaoComercial&&<div className="field"><label>Vendedor</label><input value={vendedor} onChange={e=>{setVendedor(e.target.value);setPagina(0)}} placeholder="Nome do vendedor" /></div>}</div>
  {erro&&<div className="alert error">{erro}</div>}
- <div className="form-card"><p>{carregando?'Carregando...':`${total} documento(s)`}</p><div className="table-scroll"><table><thead><tr><th>Título / Número</th><th>Cliente</th><th>Vendedor</th><th>Emissão</th><th>Ações</th></tr></thead><tbody>{linhas.map(l=><tr key={l.id}><td><strong>{l.titulo}</strong><small>{l.numero}</small></td><td>{l.cliente_nome}</td><td>{l.vendedor_nome}</td><td>{new Date(l.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</td><td><button className="secondary-button" disabled={!!pdf} onClick={()=>abrir(l.id,false)}>Ver itens</button>{' '}<button className="primary-button" disabled={!!pdf} onClick={()=>abrir(l.id,true)}>{pdf===l.id?'Abrindo...':'Baixar PDF'}</button>{' '}<button className="secondary-button" disabled={!!pdf || !!l.pedido_convertido_id} onClick={()=>onConverter(l.id)}>{l.pedido_convertido_id?'Convertida em pedido':'Converter em pedido'}</button></td></tr>)}{!carregando&&!linhas.length&&<tr><td colSpan={5}>Nenhuma cotação encontrada.</td></tr>}</tbody></table></div>
+ <div className="form-card"><p>{carregando?'Carregando...':`${total} documento(s)`}</p><div className="table-scroll"><table><thead><tr><th>Título / Número</th><th>Cliente</th><th>Vendedor</th><th>Emissão</th><th>Situação</th><th>Ações</th></tr></thead><tbody>{linhas.map(l=><tr key={l.id}><td><strong>{l.titulo}</strong><small>{l.numero}</small></td><td>{l.cliente_nome}</td><td>{l.vendedor_nome}</td><td>{new Date(l.created_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</td><td><span className={`quote-status ${l.aprovacao_status.toLowerCase()}`}>{situacoesCotacao[l.aprovacao_status]}</span></td><td><button className="secondary-button" disabled={!!pdf} onClick={()=>abrir(l.id,false)}>Ver itens / Avaliação</button>{' '}<button className="primary-button" disabled={!!pdf} onClick={()=>abrir(l.id,true)}>{pdf===l.id?'Abrindo...':'Baixar PDF'}</button>{' '}<button className="secondary-button" disabled={!!pdf || !!l.pedido_convertido_id || l.aprovacao_status!=='APROVADA'} onClick={()=>onConverter(l.id)}>{l.pedido_convertido_id?'Convertida em pedido':l.aprovacao_status==='APROVADA'?'Converter em pedido':'Requer aprovação'}</button></td></tr>)}{!carregando&&!linhas.length&&<tr><td colSpan={6}>Nenhuma cotação encontrada.</td></tr>}</tbody></table></div>
  <button className="secondary-button" disabled={carregando||pagina===0} onClick={()=>setPagina(p=>p-1)}>Anterior</button>{' '}Página {pagina+1}{' '}<button className="secondary-button" disabled={carregando||(pagina+1)*25>=total} onClick={()=>setPagina(p=>p+1)}>Próxima</button></div>
- {detalhe&&<div className="form-card">
-  <button className="secondary-button" onClick={()=>setDetalhe(null)}>Fechar detalhes</button>
+ {detalhe&&<div className="form-card" ref={detalheRef} tabIndex={-1} aria-label="Detalhes e avaliação da cotação" style={{scrollMarginTop:100}}>
+  <button className="secondary-button" onClick={()=>{setDetalhe(null);setSelecionada(null)}}>Fechar detalhes</button>
   <h2>{detalhe.titulo}</h2><p>{detalhe.cliente.nome} • {detalhe.numero}</p>
+  {selecionada&&<AvaliacaoCotacao key={selecionada.id} cotacao={selecionada} usuario={usuario} atualizar={atualizar} />}
   <p><strong>Validade:</strong> {dataBr(detalhe.validade)} • <strong>Prazo de pagamento:</strong> {detalhe.prazo_pagamento?.descricao||'—'}</p>
   <div className="table-scroll"><table><thead><tr><th>Produto</th><th>NCM / Colour Index</th><th>Qtd.</th><th>NET</th><th>Final</th><th>IPI</th><th>Total</th></tr></thead>
   <tbody>{detalhe.itens.map((i,n)=><tr key={n}>

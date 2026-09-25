@@ -5,6 +5,7 @@ import type { Filial, UsuarioApp } from '../types'
 import type { VendedorAdmin } from '../components/AdminNovoUsuario'
 import { AdminExportacao } from '../components/AdminExportacao'
 import { Loading } from '../components/Loading'
+import { ExportacaoCotacoes } from '../components/ExportacaoCotacoes'
 
 export function Relatorios({ usuario }: { usuario: UsuarioApp }) {
   const [dados, setDados] = useState<{ vendedores: VendedorAdmin[]; filiais: Filial[] } | null>(null)
@@ -32,10 +33,10 @@ export function Relatorios({ usuario }: { usuario: UsuarioApp }) {
   if (!permitido) return <div className="alert error">Acesso restrito à gestão comercial.</div>
   return <section className="page">
     <div className="page-header"><div><span className="eyebrow">GESTÃO COMERCIAL</span>
-      <h1>Relatórios de pedidos</h1><p>Consulte e exporte os pedidos de todos os vendedores e clientes.</p>
+      <h1>Relatórios comerciais</h1><p>Consulte e exporte pedidos e cotações de todos os vendedores e clientes.</p>
     </div></div>
     {erro && <div className="alert error" role="alert">{erro}</div>}
     {!dados && !erro && <Loading texto="Carregando filtros..." />}
-    {dados && <AdminExportacao {...dados} comercial />}
+    {dados && <><ExportacaoCotacoes vendedores={dados.vendedores} /><AdminExportacao {...dados} comercial /></>}
   </section>
 }
