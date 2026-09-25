@@ -1,4 +1,9 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-ptax-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+const reply = (status: number, body: unknown) => Response.json(body, { status, headers: cors })
 
 function secretKey() {
   const raw = Deno.env.get('SUPABASE_SECRET_KEYS')
@@ -34,19 +39,24 @@ function isoDate(raw: unknown) {
   throw new Error(`Data PTAX inválida: ${s}`)
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' } })
-  if (req.method !== 'POST') return Response.json({ erro: 'POST obrigatório' }, { status: 405 })
+export async function atualizarPtax(req: Request, admin: any, consultar: typeof fetch = fetch) {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  if (req.method !== 'POST') return reply(405, { erro: 'POST obrigatório' })
 
   try {
-    const auth = req.headers.get('authorization') || ''
-    const token = auth.replace(/^Bearer\s+/i, '')
-    if (!token) return Response.json({ erro: 'Não autenticado.' }, { status: 401 })
-
-    const url = Deno.env.get('SUPABASE_URL')!
-    const admin = createClient(url, secretKey(), { auth: { persistSession: false, autoRefreshToken: false } })
-    const { data: userData, error: userError } = await admin.auth.getUser(token)
-    if (userError || !userData.user) return Response.json({ erro: 'Sessão inválida.' }, { status: 401 })
+    const cronSecret = req.headers.get('x-ptax-secret')
+    if (cronSecret !== null) {
+      if (!cronSecret.trim()) return reply(401, { erro: 'Agendamento não autenticado.' })
+      const { data: valido, error } = await admin.rpc('validar_ptax_cron_secret', { p_secret: cronSecret })
+      if (error || valido !== true) return reply(401, { erro: 'Agendamento não autenticado.' })
+    } else {
+      const auth = req.headers.get('authorization') || ''
+      if (!/^Bearer\s+\S+$/i.test(auth)) return reply(401, { erro: 'Não autenticado.' })
+      const { data: userData, error: userError } = await admin.auth.getUser(auth.replace(/^Bearer\s+/i, ''))
+      if (userError || !userData.user) return reply(401, { erro: 'Sessão inválida.' })
+      const { data: perfil, error } = await admin.from('usuarios').select('ativo').eq('id', userData.user.id).single()
+      if (error || perfil?.ativo !== true) return reply(403, { erro: 'Usuário sem acesso ativo.' })
+    }
 
     // Regra ColorNet: PTAX D-1. Consultamos até ontem e, em feriados/fins de semana,
     // usamos o último fechamento disponível dos 10 dias anteriores.
@@ -60,7 +70,8 @@ Deno.serve(async (req) => {
     endpoint.searchParams.set('$select', 'cotacaoVenda,dataHoraCotacao')
     endpoint.searchParams.set('$format', 'json')
 
-    const bcb = await fetch(endpoint.toString(), { headers: { Accept: 'application/json' } })
+    // O serviço Olinda exige %20: interpreta "+" literalmente em $orderby.
+    const bcb = await consultar(endpoint.toString().replace(/\+/g, '%20'), { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(12000) })
     if (!bcb.ok) throw new Error(`BCB respondeu HTTP ${bcb.status}`)
     const payload = await bcb.json()
     const row = Array.isArray(payload?.value) ? payload.value[0] : null
@@ -80,8 +91,14 @@ Deno.serve(async (req) => {
       if (error) throw error
     }
 
-    return Response.json({ sucesso: true, valor, data_referencia: referencia, tipo: 'VENDA', regra: 'D-1 / último fechamento disponível' })
+    return reply(200, { sucesso: true, valor, data_referencia: referencia, tipo: 'VENDA', regra: 'D-1 / último fechamento disponível' })
   } catch (e) {
-    return Response.json({ erro: e instanceof Error ? e.message : String(e) }, { status: 500 })
+    return reply(503, { erro: 'Não foi possível atualizar a PTAX pelo Banco Central. Tente novamente.' })
   }
-})
+}
+
+if (typeof Deno !== 'undefined') {
+  const { createClient } = await import('npm:@supabase/supabase-js@2.116.0')
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, secretKey(), { auth: { persistSession: false, autoRefreshToken: false } })
+  Deno.serve(req => atualizarPtax(req, admin))
+}

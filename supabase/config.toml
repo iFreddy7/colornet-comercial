@@ -10,7 +10,8 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.ptax-atualizar]
-verify_jwt = true
+# Valida JWT do usuário ativo ou x-ptax-secret pelo RPC restrito a service_role.
+verify_jwt = false
 
 [functions.swift-function]
 verify_jwt = true
