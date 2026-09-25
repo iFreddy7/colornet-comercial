@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
@@ -57,7 +58,7 @@ export function NovaCotacaoV2({
   usuario: UsuarioApp
   onCotacaoCriada?: () => void
 }) {
-  const admin = usuario.perfil === 'ADMIN'
+  const admin = temVisaoComercial(usuario)
 
   const [titulo, setTitulo] = useState('')
   const [validade, setValidade] = useState(() => dataIsoMaisDias(7))

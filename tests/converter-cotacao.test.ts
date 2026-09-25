@@ -23,12 +23,23 @@ insert into filiais values('${id(5)}',true);insert into prazos_pagamento values(
 `)
 const migration = await readFile(new URL('../supabase/migrations/20260924121003_converter_cotacao_pedido.sql',import.meta.url),'utf8')
 await db.exec(migration)
+await db.exec(await readFile(new URL('../supabase/migrations/20260925134514_gestao_comercial_conversao_cotacao.sql',import.meta.url),'utf8'))
 const header={cliente_id:id(10),moeda:'USD',filial_id:id(5),prazo_pagamento_id:id(6),frete_id:id(7)}
 const item=(manual=false)=>({produto_id:id(manual?9:8),quantidade:25,preco_final_manual:31.25,observacao_preco:manual?'Aprovado':'',calculo_confirmado:{automatico:!manual,preco_net:25,preco_final:31.25,ipi:0.065,divisor:manual?null:0.8}})
 async function actor(n=1,role='authenticated'){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id(n)]);await db.exec(`set role ${role}`)}
 async function quote(n:number,manual=false,days=7){await db.exec('reset role');await db.query("insert into cotacoes values($1,'COT-TESTE',$2,$3,$4,'USD',current_date+$5::integer,$6)",[id(n),id(1),id(10),id(11),days,JSON.stringify({itens:[{produto_id:id(manual?9:8),preco_net:25,quantidade:null}]})]);await actor()}
 async function convert(n:number,items:unknown[]=[item()],cab=header){return (await db.query<{r:any}>('select public.converter_cotacao_pedido($1,$2,$3) r',[id(n),JSON.stringify(cab),JSON.stringify(items)])).rows[0].r}
 test('Invocação autenticada funciona sem acesso ao schema privado e não altera a proposta',async()=>{await quote(20);const result=await convert(20);await db.exec('reset role');const q=(await db.query<any>('select * from cotacoes where id=$1',[id(20)])).rows[0];assert.equal(q.pedido_convertido_id,result.pedido_id);assert.equal(q.documento.itens[0].quantidade,null);const p=(await db.query<any>('select * from pedidos where id=$1',[result.pedido_id])).rows[0];assert.equal(p.items[0].preco_net,25);assert.equal(p.items[0].quantidade,25)})
+test('Gerente e Diretor convertem propostas de outro vendedor, mas inativos não',async()=>{
+  for (const [n,perfil] of [[30,'GERENTE'],[31,'DIRETOR']] as const) {
+    await quote(n); await db.exec('reset role')
+    await db.query('insert into usuarios values($1,$2,true)',[id(n+100),perfil])
+    await actor(n+100); assert.ok((await convert(n)).pedido_id)
+    await quote(n+10); await db.exec('reset role')
+    await db.query('update usuarios set ativo=false where id=$1',[id(n+100)])
+    await actor(n+100); await assert.rejects(()=>convert(n+10),/inativo/)
+  }
+})
 test('Reenvio retorna o mesmo pedido e não repete a reserva, mesmo após vencer',async()=>{await actor();const first=await convert(20);await db.exec('reset role');await db.query('update cotacoes set validade=current_date-1 where id=$1',[id(20)]);await actor();const retry=await convert(20);assert.equal(first.pedido_id,retry.pedido_id);assert.equal(retry.duplicado_bloqueado,true);await db.exec('reset role');assert.equal((await db.query<any>('select count(*)::int n from reserves where pedido_id=$1',[first.pedido_id])).rows[0].n,1)})
 test('Outros vendedores, inativos e anônimos não convertem',async()=>{await quote(21);await actor(2);await assert.rejects(()=>convert(21),/permissão/);await actor(4);await assert.rejects(()=>convert(21),/inativo/);await actor(1,'anon');await assert.rejects(()=>convert(21),/permission denied/);await actor(3);assert.ok((await convert(21)).pedido_id)})
 test('Cotação vencida, quantidade ausente ou inválida e item trocado são rejeitados',async()=>{await quote(22,false,-2);await assert.rejects(()=>convert(22),/vencida/);await quote(23);for(const quantidade of [null,0,-1,'NaN','Infinity'])await assert.rejects(()=>convert(23,[{...item(),quantidade}]),/quantidade/);await assert.rejects(()=>convert(23,[{...item(),produto_id:id(9)}]),/produtos/);await assert.rejects(()=>convert(23,[]),/itens/);await assert.rejects(()=>convert(23,[item()],{...header,moeda:'BRL'}),/moeda/);await assert.rejects(()=>convert(23,[item()],{...header,filial_id:id(99)}),/filial/)})

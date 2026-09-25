@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { Fragment, FormEvent, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Cliente, ClienteContato, UsuarioApp } from '../types'
@@ -28,6 +29,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
   const [salvandoContato, setSalvandoContato] = useState(false)
 
   const admin = usuario.perfil === 'ADMIN'
+  const visaoComercial = temVisaoComercial(usuario)
 
   useEffect(() => {
     carregar('')
@@ -234,10 +236,10 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
       <div className="page-header">
         <div>
           <span className="eyebrow">{admin ? 'ADMINISTRAÇÃO' : 'CARTEIRA COMERCIAL'}</span>
-          <h1>{admin ? 'Todos os clientes' : 'Minha carteira'}</h1>
+          <h1>{visaoComercial ? 'Todos os clientes' : 'Minha carteira'}</h1>
           <p>
-            {admin
-              ? 'ADMIN visualiza todos os clientes e pode manter os contatos.'
+            {visaoComercial
+              ? 'Consulte os dados e contatos de todos os clientes.'
               : 'Você vê os dados completos dos clientes da sua carteira e pode manter a agenda de contatos.'}
           </p>
         </div>
@@ -283,6 +285,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
               <tbody>
                 {clientes.map((cliente) => {
                   const expandido = clienteAberto?.id === cliente.id
+                  const podeEditarContatos = admin || Boolean(usuario.vendedor_id && cliente.vendedor_id === usuario.vendedor_id)
 
                   return (
                     <Fragment key={cliente.id}>
@@ -428,7 +431,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
                                             )}
                                           </div>
 
-                                          <div className="contact-actions">
+                                          {podeEditarContatos && <div className="contact-actions">
                                             <button
                                               type="button"
                                               className="secondary-button compact-button"
@@ -443,7 +446,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
                                             >
                                               Excluir
                                             </button>
-                                          </div>
+                                          </div>}
                                         </article>
                                       ))}
 
@@ -454,7 +457,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
                                       )}
                                     </div>
 
-                                    <form className="contact-form" onSubmit={salvarContato}>
+                                    {podeEditarContatos && <form className="contact-form" onSubmit={salvarContato}>
                                       <h3>
                                         {contatoEditandoId
                                           ? 'Editar contato'
@@ -580,7 +583,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
                                             : 'Adicionar contato'}
                                         </button>
                                       </div>
-                                    </form>
+                                    </form>}
                                   </div>
                                 )}
                               </div>
@@ -595,7 +598,7 @@ export function Clientes({ usuario }: { usuario: UsuarioApp }) {
                 {!clientes.length && (
                   <tr>
                     <td colSpan={6} className="empty-cell">
-                      {admin
+                      {visaoComercial
                         ? 'Nenhum cliente encontrado.'
                         : 'Nenhum cliente da sua carteira foi encontrado.'}
                     </td>

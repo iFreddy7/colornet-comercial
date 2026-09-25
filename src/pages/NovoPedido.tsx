@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
@@ -213,7 +214,7 @@ export function NovoPedido({
   const fiscalSeq = useRef(0)
   const disponibilidadeSeq = useRef(0)
 
-  const admin = usuario.perfil === 'ADMIN'
+  const admin = temVisaoComercial(usuario)
 
   async function restaurarRascunho(saved: CommercialDraft) {
     let selected: Produto | null = null
