@@ -22,7 +22,7 @@ export function mensagem(q: Cotacao, to: string[], homologacao: boolean): Mail {
   return {
     to, subject: `${ambiente}ColorNet | ${q.numero} ${decisao}`.replace(/[\r\n]/g, ' '),
     text: linhas.join('\n\n'),
-    html: `<div style="font-family:Arial,sans-serif;color:#152d4d;max-width:640px"><h1 style="font-size:24px">${escape(linhas[0])}</h1>${linhas.slice(1).map(l => `<p style="white-space:pre-wrap">${escape(l)}</p>`).join('')}</div>`,
+    html: `<div style="background:#f5f7fb;padding:24px 12px;font-family:Arial,Segoe UI,sans-serif;color:#202e49"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:720px;margin:auto;background:#ffffff;border:1px solid #e2e8f0;border-collapse:collapse"><tr><td><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td width="20%" height="4" bgcolor="#c91943"></td><td width="60%" height="4" bgcolor="#19337f"></td><td width="20%" height="4" bgcolor="#069b61"></td></tr></table></td></tr><tr><td style="background:#19337f;color:#ffffff;padding:22px 26px"><div style="font-size:26px;font-weight:bold">ColorNet</div><div style="font-size:12px;margin-top:5px">PORTAL COMERCIAL · COTAÇÕES</div></td></tr><tr><td style="padding:26px"><h1 style="font-size:21px;line-height:1.4;color:#19337f;margin:0 0 20px">${escape(linhas[0])}</h1>${linhas.slice(1).map(l => `<p style="white-space:pre-wrap;line-height:1.6;margin:0 0 14px">${escape(l)}</p>`).join('')}<p style="border-top:1px solid #e2e8f0;padding-top:16px;margin:22px 0 0;font-size:11px;color:#64728a">ColorNet Comercial</p></td></tr></table></div>`,
     messageId: `<cotacao-decisao-${q.id}@colornet.com.br>`,
   }
 }

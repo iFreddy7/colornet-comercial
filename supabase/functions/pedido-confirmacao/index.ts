@@ -86,36 +86,37 @@ Deno.serve(async (req) => {
     const rows = (itens || []).map((i: any) => {
       const p = Array.isArray(i.produtos) ? i.produtos[0] : i.produtos
       return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${esc(p?.nome)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${esc(p?.codigo_protheus || 'SEM CÓDIGO')}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${Number(i.quantidade).toLocaleString('pt-BR')}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${money(i.preco_net, pedido.moeda)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${money(i.preco_final, pedido.moeda)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${(Number(i.ipi || 0) * 100).toFixed(2)}%</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd">${money(i.total_item, pedido.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${esc(p?.nome)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${esc(p?.codigo_protheus || 'SEM CÓDIGO')}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${Number(i.quantidade).toLocaleString('pt-BR')}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${money(i.preco_net, pedido.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${money(i.preco_final, pedido.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${(Number(i.ipi || 0) * 100).toFixed(2)}%</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${money(i.total_item, pedido.moeda)}</td>
       </tr>`
     }).join('')
 
-    const html = `<div style="font-family:Arial,sans-serif;color:#29243a;max-width:900px;margin:auto">
-      <div style="background:#5b3cc4;color:white;padding:18px 22px;border-radius:12px 12px 0 0">
+    const html = `<div style="font-family:Arial,sans-serif;color:#202e49;max-width:900px;margin:auto">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr><td width="20%" height="4" bgcolor="#c91943"></td><td width="60%" height="4" bgcolor="#19337f"></td><td width="20%" height="4" bgcolor="#069b61"></td></tr></table>
+        <div style="background:#19337f;color:white;padding:18px 22px;border-radius:12px 12px 0 0">
         <h2 style="margin:0">Pedido ${esc(pedido.numero)}</h2><p style="margin:5px 0 0">ColorNet Comercial</p>
       </div>
-      <div style="padding:20px;border:1px solid #e5e0ef;border-top:0">
+      <div style="padding:20px;border:1px solid #e2e8f0;border-top:0">
         <p><b>Data/hora do pedido (Brasília):</b> ${esc(dataHoraBrasilia(pedido.created_at))}</p>
         <p><b>Vendedor:</b> ${esc(vendedor?.nome)}</p>
         <p><b>Cliente:</b> ${esc(cliente?.codigo)} — ${esc(cliente?.razao_social)} • ${esc(cliente?.municipio)}/${esc(cliente?.uf)}</p>
         <p><b>Filial:</b> ${esc(filial?.nome)} • <b>Prazo:</b> ${esc(prazo?.descricao || '—')} • <b>Frete:</b> ${esc(frete?.descricao || '—')}</p>
         <p><b>Entrega:</b> ${esc(pedido.data_entrega || '—')} • <b>Transportadora:</b> ${esc(pedido.transportadora || '—')}</p>
         <table style="border-collapse:collapse;width:100%;font-size:12px;margin-top:18px">
-          <thead><tr style="background:#f1edff;text-align:left">
+          <thead><tr style="background:#f5f7fb;text-align:left">
             <th style="padding:8px">Produto</th><th style="padding:8px">Código</th><th style="padding:8px">Qtd.</th>
             <th style="padding:8px">NET</th><th style="padding:8px">Final</th><th style="padding:8px">IPI</th><th style="padding:8px">Total</th>
           </tr></thead><tbody>${rows}</tbody>
         </table>
-        <h3 style="text-align:right;color:#32225f">Total: ${money(pedido.total, pedido.moeda)}</h3>
+        <h3 style="text-align:right;color:#19337f">Total: ${money(pedido.total, pedido.moeda)}</h3>
         ${pedido.observacoes_transporte ? `<p><b>Transporte:</b> ${esc(pedido.observacoes_transporte)}</p>` : ''}
         ${pedido.observacoes ? `<p><b>Observações:</b> ${esc(pedido.observacoes)}</p>` : ''}
-        <p style="color:#777;font-size:11px;margin-top:24px">Gerado automaticamente pelo ColorNet Comercial.</p>
+        <p style="color:#64728a;font-size:11px;margin-top:24px">Gerado automaticamente pelo ColorNet Comercial.</p>
       </div>
     </div>`
 
