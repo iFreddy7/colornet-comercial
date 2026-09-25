@@ -1,3 +1,4 @@
+import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -525,7 +526,7 @@ export function NovaCotacaoV2({
         throw registroError || new Error('Documento da cotação não encontrado.')
       }
 
-      const pdf = pdfCotacaoBase64(registro.documento as DocumentoCotacao)
+      const pdf = pdfCotacaoBase64(await prepararDocumentoCotacaoPdf(registro.documento as DocumentoCotacao))
       if (IS_PRODUCTION) {
         const { error: emailError } = await supabase.functions.invoke('cotacao-confirmacao', {
           body: {

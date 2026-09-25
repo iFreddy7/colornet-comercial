@@ -153,18 +153,18 @@ Deno.serve(async (req) => {
 
     const rows = itens.map((item) => `
       <tr>
-        <td style="padding:8px;border-bottom:1px solid #ddd">
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">
           ${esc(item.produto)}
-          <div style="font-size:11px;color:#777">Código: ${esc(item.codigo || 'SEM CÓDIGO')}</div>
-          <div style="font-size:11px;color:#777">NCM: ${esc(item.ncm || 'Não informado')}</div>
-          <div style="font-size:11px;color:#777">Colour Index: ${esc(item.colour_index || 'Não informado')}</div>
+          <div style="font-size:11px;color:#64728a">Código: ${esc(item.codigo || 'SEM CÓDIGO')}</div>
+          <div style="font-size:11px;color:#64728a">NCM: ${esc(item.ncm || 'Não informado')}</div>
+          <div style="font-size:11px;color:#64728a">Colour Index: ${esc(item.colour_index || 'Não informado')}</div>
         </td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${item.quantidade == null ? '—' : Number(item.quantidade).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_net, cotacao.moeda, 4)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${money(item.preco_final, cotacao.moeda)}</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right"><b>${percentual(item.aliquota_icms)}</b></td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${(Number(item.ipi || 0) * 100).toFixed(2)}%</td>
-        <td style="padding:8px;border-bottom:1px solid #ddd;text-align:right">${item.total_item == null ? '—' : money(item.total_item, cotacao.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${item.quantidade == null ? '—' : Number(item.quantidade).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${money(item.preco_net, cotacao.moeda, 4)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${money(item.preco_final, cotacao.moeda)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right"><b>${percentual(item.aliquota_icms)}</b></td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${(Number(item.ipi || 0) * 100).toFixed(2)}%</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${item.total_item == null ? '—' : money(item.total_item, cotacao.moeda)}</td>
       </tr>
     `).join('')
 
@@ -177,12 +177,13 @@ Deno.serve(async (req) => {
     `
 
     const html = `
-      <div style="font-family:Arial,sans-serif;color:#29243a;max-width:960px;margin:auto">
-        <div style="background:#5b3cc4;color:white;padding:18px 22px;border-radius:12px 12px 0 0">
+      <div style="font-family:Arial,sans-serif;color:#202e49;max-width:960px;margin:auto">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr><td width="20%" height="4" bgcolor="#c91943"></td><td width="60%" height="4" bgcolor="#19337f"></td><td width="20%" height="4" bgcolor="#069b61"></td></tr></table>
+        <div style="background:#19337f;color:white;padding:18px 22px;border-radius:12px 12px 0 0">
           <h2 style="margin:0">Cotação Incluída</h2>
           <p style="margin:5px 0 0">${esc(cotacao.numero)} • ColorNet Comercial</p>
         </div>
-        <div style="padding:20px;border:1px solid #e5e0ef;border-top:0">
+        <div style="padding:20px;border:1px solid #e2e8f0;border-top:0">
           <p><b>Emissão (Brasília):</b> ${esc(dataHoraBrasilia(cotacao.created_at))}</p>
           <p><b>Vendedor:</b> ${esc(vendedor?.nome || cotacao.vendedor_nome)}</p>
           <p><b>Cliente:</b> ${esc(doc.cliente?.codigo)} — ${esc(doc.cliente?.nome || cotacao.cliente_nome)}</p>
@@ -191,7 +192,7 @@ Deno.serve(async (req) => {
           <p><b>Moeda:</b> ${cotacao.moeda === 'BRL' ? 'Real (R$)' : 'Dólar americano (US$)'}</p>
 
           <table style="border-collapse:collapse;width:100%;font-size:12px;margin-top:18px">
-            <thead><tr style="background:#f1edff;text-align:left">
+            <thead><tr style="background:#f5f7fb;text-align:left">
               <th style="padding:8px">Produto</th><th style="padding:8px;text-align:right">Qtd.</th>
               <th style="padding:8px;text-align:right">Preço NET</th><th style="padding:8px;text-align:right">Preço Final</th>
               <th style="padding:8px;text-align:right">ICMS</th><th style="padding:8px;text-align:right">IPI</th><th style="padding:8px;text-align:right">Total</th>
@@ -200,7 +201,7 @@ Deno.serve(async (req) => {
           </table>
           ${totalHtml}
           ${doc.observacoes ? `<p><b>Observações:</b> ${esc(doc.observacoes)}</p>` : ''}
-          <p style="color:#777;font-size:11px;margin-top:24px">O PDF oficial da cotação segue em anexo.</p>
+          <p style="color:#64728a;font-size:11px;margin-top:24px">O PDF oficial da cotação segue em anexo.</p>
         </div>
       </div>
     `

@@ -1,3 +1,4 @@
+import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -32,7 +33,7 @@ export function Cotacoes({usuario,onConverter}:{usuario:UsuarioApp;onConverter:(
  async function abrir(id:string,baixar:boolean){if(pdf)return;setPdf(id);setErro('');try{
   const {data,error}=await supabase.from('cotacoes').select(`${campos},documento`).eq('id',id).single();if(error)throw new Error(error.message)
   const d=data.documento as DocumentoCotacao
-  if(baixar){const {baixarPdfCotacao}=await import('../lib/cotacaoPdf');baixarPdfCotacao(d)}else {setDetalhe(d);setSelecionada(data as unknown as Linha)}
+  if(baixar){const {baixarPdfCotacao}=await import('../lib/cotacaoPdf');baixarPdfCotacao(await prepararDocumentoCotacaoPdf(d))}else {setDetalhe(d);setSelecionada(data as unknown as Linha)}
  }catch(e){setErro(e instanceof Error?e.message:'Não foi possível abrir a cotação.')}finally{setPdf('')}}
  async function atualizar(){if(selecionada)await abrir(selecionada.id,false);setRevisao(r=>r+1)}
  const moeda=(n:number,m:string)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:m}).format(n)
