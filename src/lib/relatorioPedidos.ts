@@ -89,7 +89,7 @@ function achatar(registro: Registro, prefixo = '', linha: Linha = Object.create(
   return linha
 }
 
-function planilha(wb: ExcelJS.Workbook, nome: string, registros: Registro[], preferidas: string[] = []) {
+export function planilha(wb: ExcelJS.Workbook, nome: string, registros: Registro[], preferidas: string[] = []) {
   if (registros.length > 1_048_575) throw new Error('O relatório excede o limite de linhas do Excel. Selecione um período menor.')
   const linhas = registros.map(r => achatar(r))
   const disponiveis = new Set(linhas.flatMap(l => Object.keys(l)))

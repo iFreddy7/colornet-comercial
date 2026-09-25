@@ -20,3 +20,8 @@ verify_jwt = false
 
 [functions.ingest-email-xlsx]
 verify_jwt = false
+
+# auth.getUser + perfil ativo são verificados no corpo em todo envio.
+# O diagnóstico SMTP aceita exclusivamente a secret key do próprio projeto.
+[functions.cotacao-decisao-email]
+verify_jwt = false
