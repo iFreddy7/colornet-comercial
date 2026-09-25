@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { AdminUsuario, Filial, IntegracaoExecucao, UsuarioApp } from '../types'
 import { Loading } from '../components/Loading'
@@ -6,6 +6,8 @@ import { AdminNovoUsuario } from '../components/AdminNovoUsuario'
 import { AdminNovoVendedor } from '../components/AdminNovoVendedor'
 import { AdminExportacao } from '../components/AdminExportacao'
 import { dataHoraBrasilia } from '../lib/dataHora'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
+import { passwordLinkFailure } from '../lib/adminPasswordLink'
 
 type Vendedor = { id: string; codigo_protheus: string | null; nome: string; email: string | null; ativo: boolean }
 
@@ -27,6 +29,8 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
   const [erro, setErro] = useState('')
   const [mensagem, setMensagem] = useState('')
   const [gerandoLinkId, setGerandoLinkId] = useState<string | null>(null)
+  const linkEmAndamento = useRef(false)
+  const [semAcesso, setSemAcesso] = useState<AdminUsuario | null>(null)
   const [linkSenha, setLinkSenha] = useState<{ nome: string; email: string; link: string } | null>(null)
 
   useEffect(() => { if (usuario.perfil === 'ADMIN' && usuario.ativo) carregar() }, [usuario.id, usuario.perfil, usuario.ativo])
@@ -76,35 +80,36 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     await carregar()
   }
 
-  async function gerarLinkSenha(alvo: AdminUsuario) {
-    if (!alvo.email) return
+  async function gerarLinkSenha(alvo: AdminUsuario, criarAcesso = false) {
+    if (!alvo.email || linkEmAndamento.current) return
+    linkEmAndamento.current = true
     setErro('')
     setMensagem('')
     setLinkSenha(null)
+    setSemAcesso(null)
     setGerandoLinkId(alvo.id)
-
-    const { data, error } = await supabase.functions.invoke('admin-gerar-link-senha', {
-      body: { usuario_id: alvo.id },
-    })
-
-    setGerandoLinkId(null)
-
-    if (error) {
-      setErro('Não foi possível gerar o link. Confirme se o usuário existe no Auth da homologação.')
-      return
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-gerar-link-senha', {
+        body: { usuario_id: alvo.id, ...(criarAcesso ? { criar_acesso: true, email_confirmacao: alvo.email } : {}) },
+      })
+      if (error) {
+        const failure = await passwordLinkFailure(error)
+        setErro(failure.message)
+        if (failure.canCreateAccess && !IS_PRODUCTION) setSemAcesso(alvo)
+        return
+      }
+      if (!data?.link) {
+        setErro(data?.erro || 'O serviço não retornou o link de redefinição.')
+        return
+      }
+      setLinkSenha({ nome: data.nome || alvo.nome || 'Usuário', email: data.email || alvo.email, link: data.link })
+      setMensagem(`${data.acesso_criado ? 'Acesso criado. ' : ''}Link temporário gerado para ${data.email || alvo.email}.`)
+    } catch {
+      setErro('Não foi possível concluir a solicitação. Verifique sua conexão e tente novamente.')
+    } finally {
+      linkEmAndamento.current = false
+      setGerandoLinkId(null)
     }
-
-    if (!data?.link) {
-      setErro(data?.erro || 'O Supabase não retornou o link de redefinição.')
-      return
-    }
-
-    setLinkSenha({
-      nome: data.nome || alvo.nome || 'Usuário',
-      email: data.email || alvo.email,
-      link: data.link,
-    })
-    setMensagem(`Link temporário gerado para ${data.email || alvo.email}.`)
   }
 
   async function copiarLinkSenha() {
@@ -130,15 +135,25 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     <section className="page">
       <div className="page-header">
         <div>
-          <span className="eyebrow">ADMINISTRAÇÃO • HOMOLOGAÇÃO</span>
+          <span className="eyebrow">ADMINISTRAÇÃO • {APP_ENV_LABEL}</span>
           <h1>Painel ADMIN</h1>
           <p>Cadastro de usuários, vendedores, vínculos, relatórios e acompanhamento das integrações.</p>
         </div>
         <button className="secondary-button" onClick={carregar}>Atualizar</button>
       </div>
 
-      {erro && <div className="alert error">{erro}</div>}
-      {mensagem && <div className="alert success">{mensagem}</div>}
+      {erro && <div className="alert error" role="alert">{erro}</div>}
+      {mensagem && <div className="alert success" role="status">{mensagem}</div>}
+      {semAcesso && (
+        <div className="form-card password-link-card" role="region" aria-label="Criar acesso na homologação">
+          <strong>Criar acesso para {semAcesso.nome || semAcesso.email}</strong>
+          <p>O acesso será criado para {semAcesso.email}, preservando o perfil e os vínculos deste cadastro. A própria pessoa definirá a senha pelo link.</p>
+          <div className="admin-actions">
+            <button className="primary-button" disabled={gerandoLinkId !== null} onClick={() => gerarLinkSenha(semAcesso, true)}>Criar acesso e gerar link</button>
+            <button className="secondary-button" onClick={() => setSemAcesso(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {linkSenha && (
         <div className="form-card password-link-card">
           <div className="section-title">
@@ -194,7 +209,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
                       {vend && <small>Atual: {vend.nome}</small>}
                     </td>
                     <td><label className="switch-line"><input type="checkbox" checked={item.ativo} onChange={(e) => alterarLocal(item.id, { ativo: e.target.checked })}/><span>{item.ativo ? 'Sim' : 'Não'}</span></label></td>
-                    <td><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" disabled={gerandoLinkId === item.id} onClick={() => gerarLinkSenha(item)}>{gerandoLinkId === item.id ? 'Gerando...' : 'Gerar link de senha'}</button></div></td>
+                    <td><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id || gerandoLinkId !== null} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" disabled={gerandoLinkId !== null || !item.ativo || !item.email} onClick={() => gerarLinkSenha(item)}>{gerandoLinkId === item.id ? 'Gerando...' : 'Gerar link de senha'}</button></div></td>
                   </tr>
                 )
               })}
