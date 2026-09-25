@@ -15,7 +15,7 @@ export function mensagem(q: Cotacao, to: string[], homologacao: boolean): Mail {
   const linhas = [
     `${ambiente}Cotação ${q.numero} ${decisao}`,
     `Título: ${q.titulo}`, `Cliente: ${q.cliente_nome}`, `Vendedor: ${q.vendedor_nome}`, `Valor: ${total}`,
-    `Decisão de: ${q.aprovacao_nome}`, `Data: ${new Date(q.aprovacao_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília)`,
+    `${q.aprovacao_status === 'APROVADA' ? 'Aprovado por' : 'Recusado por'}: ${q.aprovacao_nome}`, `Data: ${new Date(q.aprovacao_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília)`,
     ...(q.aprovacao_status === 'REPROVADA' ? [`Motivo da reprovação: ${q.aprovacao_motivo}`] : []),
     'Esta mensagem registra a avaliação comercial da cotação.',
   ]

@@ -34,6 +34,7 @@ test('Destinatários e conteúdo vêm da reserva do servidor; HTML de cotação 
   assert.equal(f.mails.length,1);assert.ok(f.mails[0].to.includes('marcia@colornet.com.br'));assert.ok(!f.mails[0].to.includes('intruso@example.com'))
   assert.match(f.mails[0].subject,/HOMOLOGAÇÃO.*reprovada/);assert.match(f.mails[0].html,/&lt;script&gt;/);assert.doesNotMatch(f.mails[0].html,/<script>/)
   assert.match(f.mails[0].text,/Motivo da reprovação: Rever <preço>/);assert.match(f.mails[0].text,/sem total geral/)
+  assert.match(f.mails[0].text,/Recusado por: Gestor/);assert.match(f.mails[0].html,/Recusado por: Gestor/);assert.doesNotMatch(f.mails[0].text,/Decisão de:/)
   assert.equal(f.calls[0].args.p_ator_id,id)
 })
 test('Sem configuração, envio duplicado ou em curso não transmite',async()=>{
@@ -50,5 +51,6 @@ test('Falha conhecida, envio parcial e resposta incerta são gravados separadame
 })
 test('Mensagem aprovada tem total e não apresenta motivo de reprovação',()=>{
   const m=mensagem({...quote,total:25.12,aprovacao_status:'APROVADA'},['jrodrigues@colornet.com.br'],false)
+  assert.match(m.text,/Aprovado por: Gestor/);assert.match(m.html,/Aprovado por: Gestor/);assert.doesNotMatch(m.text,/Decisão de:/)
   assert.match(m.subject,/aprovada/);assert.doesNotMatch(m.subject,/HOMOLOGAÇÃO/);assert.match(m.text,/25,12/);assert.doesNotMatch(m.text,/Motivo da reprovação/)
 })
