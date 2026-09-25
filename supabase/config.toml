@@ -3,11 +3,15 @@
 [functions.admin-criar-usuario]
 verify_jwt = true
 
+[functions.admin-gerar-link-senha]
+verify_jwt = true
+
 [functions.cotacao-confirmacao]
 verify_jwt = true
 
 [functions.ptax-atualizar]
-verify_jwt = true
+# Valida JWT do usuário ativo ou x-ptax-secret pelo RPC restrito a service_role.
+verify_jwt = false
 
 [functions.swift-function]
 verify_jwt = true
@@ -16,4 +20,9 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.ingest-email-xlsx]
+verify_jwt = false
+
+# auth.getUser + perfil ativo são verificados no corpo em todo envio.
+# O diagnóstico SMTP aceita exclusivamente a secret key do próprio projeto.
+[functions.cotacao-decisao-email]
 verify_jwt = false

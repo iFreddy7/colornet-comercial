@@ -1,0 +1,10 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { DRAFT_TTL, draftKey, parseDraft, writeDraft, type CommercialDraft } from '../src/lib/commercialDraft.ts'
+const data: CommercialDraft = { fields: { titulo: 'Proposta', observacoes: 'Revisar entrega' }, items: [], productId: null, idempotencyKey: crypto.randomUUID() }
+function storage() { const values = new Map<string,string>(); return { getItem: (k:string) => values.get(k) ?? null, setItem: (k:string,v:string) => {values.set(k,v)}, removeItem: (k:string) => {values.delete(k)} } }
+test('Restaura campos e conserva a chave que impede reenvio duplicado', () => { const s=storage(); const saved=writeDraft(s,'draft',data,null); assert.deepEqual(parseDraft(s.getItem('draft'))?.data,data); assert.equal(parseDraft(s.getItem('draft'))?.revision,saved.revision) })
+test('Rascunhos ficam separados por usuário, ambiente e documento', () => { const keys=[draftKey('HML','A','pedido'),draftKey('PROD','A','pedido'),draftKey('HML','B','pedido'),draftKey('HML','A','cotacao')]; assert.equal(new Set(keys).size,4) })
+test('Dados corrompidos, fora do prazo ou com formato inválido não são restaurados', () => { const s=storage(),saved=writeDraft(s,'draft',data,null); for(const value of ['{',JSON.stringify({...saved,version:2}),JSON.stringify({...saved,savedAt:Date.now()-DRAFT_TTL-1}),JSON.stringify({...saved,data:{...data,fields:{titulo:123}}}),JSON.stringify({...saved,data:{...data,items:[{quantidade:-1}]}})])assert.equal(parseDraft(value),null) })
+test('Aba antiga não sobrescreve revisão de outra aba nem recria rascunho já concluído', () => { const s=storage(),a=writeDraft(s,'draft',data,null); const b=writeDraft(s,'draft',{...data,fields:{titulo:'Nova revisão'}},a.revision); assert.throws(()=>writeDraft(s,'draft',data,a.revision),/outra aba/); assert.equal(parseDraft(s.getItem('draft'))?.revision,b.revision); s.removeItem('draft'); assert.throws(()=>writeDraft(s,'draft',data,b.revision),/outra aba/) })
+test('Falha do armazenamento é informada ao formulário', () => { assert.throws(()=>writeDraft({getItem:()=>null,setItem:()=>{throw new Error('quota')}},'draft',data,null),/quota/) })

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { IS_PRODUCTION } from './env'
+import { recoveryLink } from './recoveryContext'
 
 const PROD_REF = 'duojavyrugezvlvuuwag'
 const HOMOLOG_REF = 'nqyddagfawklfqwumlie'
@@ -31,6 +32,6 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: !recoveryLink.requested,
   },
 })

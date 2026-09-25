@@ -1991,3 +1991,141 @@ tbody tr:last-child td {
     width: 100%;
   }
 }
+
+/* ============================================================
+   AJUSTE MOBILE — MENU VERTICAL
+   ============================================================ */
+@media (max-width: 900px) {
+  .sidebar .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .sidebar .nav-item {
+    width: 100%;
+    min-height: 46px;
+    justify-content: flex-start;
+    padding: 0 14px;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .sidebar .nav-item span {
+    display: inline;
+  }
+}
+
+
+/* ============================================================
+   DASHBOARD COMERCIAL
+   ============================================================ */
+.dashboard-main-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.dashboard-highlight {
+  border-color: #ddd4f7;
+  background: linear-gradient(180deg, #ffffff, #faf8ff);
+}
+
+.dashboard-money {
+  font-size: 25px !important;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-note {
+  margin-bottom: 18px;
+}
+
+.dashboard-sellers {
+  margin-top: 0;
+}
+
+.dashboard-sellers-table {
+  min-width: 560px;
+}
+
+.dashboard-sellers-table th:nth-child(2),
+.dashboard-sellers-table td:nth-child(2) {
+  width: 130px;
+  text-align: center;
+}
+
+.dashboard-sellers-table th:nth-child(3),
+.dashboard-sellers-table td:nth-child(3) {
+  width: 220px;
+  text-align: right;
+}
+
+.dashboard-personal {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-personal strong {
+  color: #4b329a;
+}
+
+@media (max-width: 900px) {
+  .dashboard-main-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-main-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-money {
+    font-size: 23px !important;
+  }
+}
+
+
+/* ============================================================
+   ADMIN — LINK TEMPORÁRIO DE SENHA
+   ============================================================ */
+.password-link-card {
+  border-color: #ded4fb;
+  background: #fcfbff;
+}
+
+.password-link-warning {
+  margin-bottom: 12px;
+  border: 1px solid #f0d799;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #6c5517;
+  background: #fff9e8;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.password-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.password-link-row input {
+  min-width: 0;
+  border: 1px solid #dcd8e7;
+  border-radius: 10px;
+  padding: 10px 11px;
+  background: white;
+  color: #393043;
+  font: inherit;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .password-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .password-link-row button {
+    width: 100%;
+  }
+}

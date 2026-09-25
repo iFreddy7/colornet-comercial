@@ -1,7 +1,8 @@
+import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL } from '../lib/env'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import { pdfCotacaoBase64, type DocumentoCotacao } from '../lib/cotacaoPdf'
 import type {
   CalculoFiscal,
@@ -14,6 +15,9 @@ import type {
   UsuarioApp,
 } from '../types'
 import { Loading } from '../components/Loading'
+import { DraftNotice } from '../components/DraftNotice'
+import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
+import { useCommercialDraft } from '../lib/useCommercialDraft'
 
 function n(value: unknown) {
   const numero = Number(value)
@@ -92,12 +96,49 @@ export function NovaCotacaoV2({
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
 
   const buscaSeq = useRef(0)
   const fiscalSeq = useRef(0)
   const envioRef = useRef(false)
   const adicionandoRef = useRef(false)
+
+
+  async function restaurarRascunho(saved: CommercialDraft) {
+    let selected: Produto | null = null
+    if (saved.productId) {
+      const result = await supabase.from('produtos').select('id,codigo_protheus,nome,ncm,colour_index,grupo_tributario,status_fiscal,fiscal_pendencia,ativo,precos(*)').eq('id', saved.productId).eq('ativo', true).maybeSingle()
+      if (result.error) throw new Error('Não foi possível conferir o produto do rascunho. Tente novamente.')
+      selected = result.data as Produto | null
+    }
+    setTitulo(saved.fields.titulo || '')
+    setClienteBusca(saved.fields.clienteBusca || '')
+    setClienteId(saved.fields.clienteId || '')
+    setPrazoBusca(saved.fields.prazoBusca || '')
+    setPrazoId(saved.fields.prazoId || '')
+    setFreteId(saved.fields.freteId || '')
+    setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
+    setObservacoes(saved.fields.observacoes || '')
+    setProdutoBusca(saved.fields.produtoBusca || '')
+    setQuantidade(saved.fields.quantidade || '')
+    setPrecoNet(saved.fields.precoNet || '')
+    setEntradaPreco(saved.fields.entradaPreco === 'FINAL' ? 'FINAL' : 'NET')
+    setObservacaoPreco(saved.fields.observacaoPreco || '')
+    setValidade(saved.fields.validade || '')
+    setPrecoFinal(saved.fields.precoFinal || '')
+    setFaixa(saved.fields.faixa || null)
+    setProduto(selected)
+    setItens(saved.items)
+    setIdempotencyKey(saved.idempotencyKey)
+    setCalculo(null)
+  }
+  const draft = useCommercialDraft(
+    draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
+    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
+    !carregando, restaurarRascunho
+  )
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId) || null
   const prazoSelecionado = prazos.find((p) => p.id === prazoId) || null
@@ -485,16 +526,20 @@ export function NovaCotacaoV2({
         throw registroError || new Error('Documento da cotação não encontrado.')
       }
 
-      const pdf = pdfCotacaoBase64(registro.documento as DocumentoCotacao)
-      const { error: emailError } = await supabase.functions.invoke('cotacao-confirmacao', {
-        body: {
-          cotacao_id: data.id,
-          pdf_nome: pdf.nome,
-          pdf_base64: pdf.base64,
-        },
-      })
-      if (emailError) throw emailError
-      emailOk = true
+      const pdf = pdfCotacaoBase64(await prepararDocumentoCotacaoPdf(registro.documento as DocumentoCotacao))
+      if (IS_PRODUCTION) {
+        const { error: emailError } = await supabase.functions.invoke('cotacao-confirmacao', {
+          body: {
+            cotacao_id: data.id,
+            pdf_nome: pdf.nome,
+            pdf_base64: pdf.base64,
+          },
+        })
+        if (emailError) throw emailError
+        emailOk = true
+      } else {
+        setAvisoEmail('HOMOLOGAÇÃO: cotação salva sem envio de e-mail real.')
+      }
     } catch (emailError) {
       console.error('Confirmação da cotação:', emailError)
       setAvisoEmail(
@@ -508,6 +553,7 @@ export function NovaCotacaoV2({
         : `${numero} salva com sucesso.`
     )
 
+    draft.clear()
     setTitulo('')
     setValidade(dataIsoMaisDias(7))
     setClienteBusca('')
@@ -534,15 +580,18 @@ export function NovaCotacaoV2({
     )
   }
 
+  if (draft.pending) return <section className="page"><h1>Nova Cotação</h1><DraftNotice draft={draft} /></section>
+
   return (
     <section className="page">
+      <DraftNotice draft={draft} />
       <div className="page-header">
         <div>
           <span className="eyebrow">NOVA COTAÇÃO • {APP_ENV_LABEL}</span>
           <h1>Nova Cotação</h1>
           <p>Monte a proposta com NET e final, validade, prazo de pagamento e frete.</p>
         </div>
-        <div className="status-pill"><span className="status-dot" />Validação server-side</div>
+        <div className="status-pill"><span className="status-dot" />Validação automática</div>
       </div>
 
       {erro && <div className="alert error">{erro}</div>}

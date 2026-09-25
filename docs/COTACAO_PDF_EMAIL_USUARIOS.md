@@ -56,3 +56,14 @@ Depois do redeploy, a função `cotacao-confirmacao` enviará o PDF por esse gat
 ## Observação de implantação
 
 O banco e a Edge Function podem ser aplicados independentemente do frontend. O frontend deve ser publicado somente após homologação visual/funcional do branch.
+
+## Identidade visual e faturamento — 25/09/2026
+
+- PDF: título da coluna `Produto`, quadro de faturamento à esquerda e cliente à direita. Azul `#19337f`, vermelho `#c91943` e verde `#069b61` acompanham a identidade do portal.
+- As unidades exibem razão social, CNPJ, inscrição estadual, endereço e CEP da ficha cadastral de 27/05/2025 fornecida pela ColorNet. A identificação pública fica em `src/lib/filiaisFaturamento.ts`, associada ao código da unidade (0101 Matriz-SP, 0102 Filial-Itajaí, 0103 Filial-Mauá), nunca ao código da regra fiscal.
+- O PDF consulta `filiais` com a sessão do usuário para resolver os IDs de cada ambiente. Cotações com mais de uma origem mostram as unidades no quadro e a filial correspondente em cada item. Origem ausente continua como “A confirmar”. Dados e preços da cotação permanecem intactos.
+- E-mails de aprovação/reprovação seguem as mesmas cores, preservando `Aprovado por` / `Recusado por`, motivo e destinatários. A mudança é apenas visual.
+- Os modelos `cotacao-confirmacao` e `pedido-confirmacao` também foram alinhados no código. Essas duas funções não estão implantadas na homologação; seus envios seguem desabilitados nesse ambiente. Publicá-las na produção faz parte da promoção futura, com a configuração existente do gateway.
+- Sem migração de banco. Nesta etapa, publicar apenas o frontend e `cotacao-decisao-email` na homologação. A função mantém `verify_jwt=false` e sua autenticação interna com `getUser` e validação de Gerente/Diretor ativo.
+
+Validação: 114 testes, TypeScript e build; conferência visual de PDF real, cotações com três unidades e sete páginas; prévias locais dos e-mails aprovado/reprovado, sem novos disparos. O PDF preserva quantidades ausentes e totais existentes.

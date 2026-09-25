@@ -2,9 +2,9 @@ name: Validate
 
 on:
   push:
-    branches: [main]
+    branches: [main, homologacao]
   pull_request:
-    branches: [main]
+    branches: [main, homologacao]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,14 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build
+      - name: Build homologacao
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://nqyddagfawklfqwumlie.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          VITE_APP_ENV: HOMOLOGACAO
+
+      - name: Build producao
         run: npm run build
         env:
           VITE_SUPABASE_URL: https://duojavyrugezvlvuuwag.supabase.co
@@ -39,3 +46,4 @@ jobs:
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+

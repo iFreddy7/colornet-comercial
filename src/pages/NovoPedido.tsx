@@ -1,7 +1,7 @@
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL } from '../lib/env'
+import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import type {
   CalculoFiscal,
   Cliente,
@@ -14,6 +14,9 @@ import type {
   UsuarioApp,
 } from '../types'
 import { Loading } from '../components/Loading'
+import { DraftNotice } from '../components/DraftNotice'
+import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
+import { useCommercialDraft } from '../lib/useCommercialDraft'
 
 type FilialRel = {
   id: string
@@ -203,7 +206,8 @@ export function NovoPedido({
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID())
+  const [draftKind] = useState(() => pedidoDuplicarId ? `pedido-copia-${pedidoDuplicarId}` : 'pedido')
   const [duplicando, setDuplicando] = useState(false)
 
   const produtoBuscaSeq = useRef(0)
@@ -211,6 +215,46 @@ export function NovoPedido({
   const disponibilidadeSeq = useRef(0)
 
   const admin = temVisaoComercial(usuario)
+
+  async function restaurarRascunho(saved: CommercialDraft) {
+    let selected: Produto | null = null
+    if (saved.productId) {
+      const result = await supabase.from('produtos').select('id,codigo_protheus,nome,ncm,colour_index,grupo_tributario,status_fiscal,fiscal_pendencia,ativo,precos(*)').eq('id', saved.productId).eq('ativo', true).maybeSingle()
+      if (result.error) throw new Error('Não foi possível conferir o produto do rascunho. Tente novamente.')
+      selected = result.data as Produto | null
+    }
+    setTitulo(saved.fields.titulo || '')
+    setClienteBusca(saved.fields.clienteBusca || '')
+    setClienteId(saved.fields.clienteId || '')
+    setPrazoBusca(saved.fields.prazoBusca || '')
+    setPrazoId(saved.fields.prazoId || '')
+    setFreteId(saved.fields.freteId || '')
+    setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
+    setObservacoes(saved.fields.observacoes || '')
+    setProdutoBusca(saved.fields.produtoBusca || '')
+    setQuantidade(saved.fields.quantidade || '')
+    setPrecoNet(saved.fields.precoNet || '')
+    setEntradaPreco(saved.fields.entradaPreco === 'FINAL' ? 'FINAL' : 'NET')
+    setObservacaoPreco(saved.fields.observacaoPreco || '')
+    setFilialId(saved.fields.filialId || '')
+    setTransportadora(saved.fields.transportadora || '')
+    setDataEntrega(saved.fields.dataEntrega || '')
+    setObsTransporte(saved.fields.obsTransporte || '')
+    setPrecoFinalManual(saved.fields.precoFinalManual || '')
+    setFaixa(saved.fields.faixa || null)
+    setProduto(selected)
+    setItens(saved.items)
+    setIdempotencyKey(saved.idempotencyKey)
+    setCalculo(null)
+  }
+  const draft = useCommercialDraft(
+    draftKey(APP_ENV_LABEL, usuario.id, draftKind),
+    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, filialId, transportadora, dataEntrega, obsTransporte, precoFinalManual, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || transportadora || obsTransporte || dataEntrega || precoFinalManual || (filialId && filialId !== filiais[0]?.id)),
+    !carregandoBase && !duplicando && !pedidoDuplicarId, restaurarRascunho
+  )
+
   const clienteSelecionado = clientes.find((c) => c.id === clienteId) || null
   const preco = precoOf(produto)
   const filialSelecionada = filiais.find((f) => f.id === filialId) || null
@@ -577,11 +621,11 @@ export function NovoPedido({
     const novosItens: ItemPedidoLocal[] = []
     for (const item of (its.data ?? []) as any[]) {
       const produtoRel = Array.isArray(item.produtos) ? item.produtos[0] : item.produtos
-      const { data: calc, error: calcError } = await supabase.rpc('calcular_item_pedido', {
+      const { data: calc, error: calcError } = await supabase.rpc('calcular_preco_comercial', {
         p_cliente_id: pedido.cliente_id,
         p_produto_id: item.produto_id,
         p_filial_id: pedido.filial_id,
-        p_preco_net: Number(item.preco_net),
+        p_preco_net: Number(item.preco_net), p_preco_final: null, p_cotacao: false,
       })
       if (calcError) continue
       const result = calc as CalculoFiscal
@@ -783,6 +827,34 @@ export function NovoPedido({
     envioRef.current = true
     setSalvando(true)
 
+    // Recheck restored and long-lived forms before submitting their displayed totals.
+    if (!cotacao) {
+      try {
+        if (!clienteSelecionado || !filialSelecionada) throw new Error('Cliente ou filial indisponível. Revise os dados do pedido.')
+        const revisados: ItemPedidoLocal[] = []
+        for (const item of itens) {
+          const { data, error } = await supabase.rpc('calcular_preco_comercial', { p_cliente_id: clienteId, p_produto_id: item.produto_id, p_filial_id: filialId, p_preco_net: item.preco_net, p_preco_final: null, p_cotacao: false })
+          if (error) throw new Error(error.message)
+          const fiscal = data as CalculoFiscal
+          if (!fiscal.automatico && item.modo_fiscal === 'AUTOMATICO') throw new Error(`O produto ${item.produto} passou a exigir preço manual. Remova e adicione o item novamente para informar a aprovação.`)
+          const final = fiscal.automatico ? Number(fiscal.preco_final) : item.preco_final
+          const ipi = Number(fiscal.ipi || 0)
+          if (!Number.isFinite(final) || final <= 0 || !Number.isFinite(ipi)) throw new Error('Cálculo fiscal inválido. Revise os produtos.')
+          const subtotal = Number((final * Number(item.quantidade)).toFixed(2))
+          const valorIpi = Number((subtotal * ipi).toFixed(2))
+          revisados.push({ ...item, preco_final: final, ipi, subtotal, valor_ipi: valorIpi, total_item: Number((subtotal + valorIpi).toFixed(2)), modo_fiscal: fiscal.automatico ? 'AUTOMATICO' : 'MANUAL', aliquota_icms: fiscal.aliquota ?? null, divisor_icms: fiscal.divisor ?? null })
+        }
+        if (revisados.some((item, i) => item.preco_final !== itens[i].preco_final || item.ipi !== itens[i].ipi || item.modo_fiscal !== itens[i].modo_fiscal || item.divisor_icms !== itens[i].divisor_icms)) {
+          setItens(revisados)
+          throw new Error('Os impostos ou preços mudaram. Os valores foram atualizados; revise o total e confirme novamente.')
+        }
+      } catch (error) {
+        envioRef.current = false; setSalvando(false)
+        setErro(error instanceof Error ? error.message : 'Não foi possível conferir os preços. Tente novamente.')
+        return
+      }
+    }
+
     const cabecalho = {
       titulo: titulo.trim(),
       cliente_id: clienteId,
@@ -827,6 +899,7 @@ export function NovoPedido({
       envioRef.current = false
       setSalvando(false)
       setSucesso(`${data.numero} salva. Acesse Cotações / Listas para baixar o PDF.`)
+      draft.clear()
       setItens([]); setTitulo(''); setObservacoes(''); setIdempotencyKey(crypto.randomUUID())
       onPedidoCriado()
       return
@@ -866,18 +939,24 @@ export function NovoPedido({
     setSucesso(mensagem)
 
     if (resposta?.pedido_id) {
-      const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
-        body: { pedido_id: resposta.pedido_id },
-      })
-      if (emailError) {
-        setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
+      if (IS_PRODUCTION) {
+        const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
+          body: { pedido_id: resposta.pedido_id },
+        })
+        if (emailError) {
+          setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
+        }
+      } else {
+        setAvisoEmail('HOMOLOGAÇÃO: pedido salvo sem envio de e-mail real.')
       }
     }
 
     envioRef.current = false
     setSalvando(false)
 
+    draft.clear()
     setItens([])
+    setTitulo(''); setProduto(null); setProdutoBusca(''); setQuantidade(''); setPrecoNet(''); setPrecoFinalManual(''); setCalculo(null); setFaixa(null); setObservacaoPreco('')
     setClienteId('')
     setClienteBusca('')
     setPrazoId('')
@@ -901,21 +980,23 @@ export function NovoPedido({
     )
   }
 
+  if (draft.pending) return <section className="page"><h1>Novo Pedido</h1><DraftNotice draft={draft} /></section>
+
   return (
     <section className="page">
+      <DraftNotice draft={draft} />
       <div className="page-header">
         <div>
           <span className="eyebrow">{cotacao ? 'NOVA COTAÇÃO' : 'NOVO PEDIDO'} • {APP_ENV_LABEL}</span>
           <h1>{cotacao ? 'Nova Cotação / Lista de Preço' : 'Novo Pedido'}</h1>
           <p>
-            Cliente é filtrado pelo banco. O cálculo fiscal e a gravação final
-            são novamente validados no PostgreSQL.
+            Preencha os dados comerciais e adicione os produtos para preparar seu pedido.
           </p>
         </div>
 
         <div className="status-pill">
           <span className="status-dot" />
-          Validação server-side
+          Validação automática
         </div>
       </div>
 
@@ -1578,7 +1659,7 @@ export function NovoPedido({
           onClick={salvarPedido}
           disabled={salvando || !itens.length}
         >
-          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido no Supabase'}
+          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido'}
         </button>
       </div>
     </section>
