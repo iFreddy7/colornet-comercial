@@ -27,12 +27,13 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const buttons = menuRef.current?.querySelectorAll<HTMLButtonElement>('button')
-    buttons?.[0]?.focus()
+    const focusFrame = requestAnimationFrame(() => buttons?.[0]?.focus())
     function handleKey(event: KeyboardEvent) {
       if (event.key === 'Escape') setMenuAberto(false)
       if (event.key !== 'Tab' || !buttons?.length) return
       const first = buttons[0], last = buttons[buttons.length - 1]
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      if (!menuRef.current?.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus() }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }
     const desktop = window.matchMedia('(min-width: 901px)')
@@ -40,6 +41,7 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
     desktop.addEventListener('change', closeOnDesktop)
     document.addEventListener('keydown', handleKey)
     return () => {
+      cancelAnimationFrame(focusFrame)
       document.body.style.overflow = previousOverflow
       desktop.removeEventListener('change', closeOnDesktop)
       document.removeEventListener('keydown', handleKey)
