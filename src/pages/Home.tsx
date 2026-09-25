@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { DashboardStats, UsuarioApp } from '../types'
@@ -7,7 +8,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [erro, setErro] = useState('')
 
-  const admin = usuario.perfil === 'ADMIN'
+  const visaoComercial = temVisaoComercial(usuario)
 
   useEffect(() => {
     carregar()
@@ -47,8 +48,8 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
           <span className="eyebrow">COLORNET COMERCIAL • FASE 5</span>
           <h1>Olá, {usuario.nome || 'bem-vindo'}.</h1>
           <p>
-            {admin
-              ? 'Você está como ADMIN e possui visão geral da operação.'
+            {visaoComercial
+              ? 'Você possui visão geral dos clientes e pedidos da operação.'
               : 'Clientes e pedidos abaixo já respeitam a sua carteira e seu usuário.'}
           </p>
         </div>
@@ -67,15 +68,15 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
         <>
           <div className="stats-grid five">
             <div className="stat-card">
-              <span>{admin ? 'Clientes' : 'Minha carteira'}</span>
+              <span>{visaoComercial ? 'Clientes' : 'Minha carteira'}</span>
               <strong>{stats.clientes.toLocaleString('pt-BR')}</strong>
-              <small>{admin ? 'todos os clientes' : 'clientes liberados pelo RLS'}</small>
+              <small>{visaoComercial ? 'todos os clientes' : 'clientes liberados pelo RLS'}</small>
             </div>
 
             <div className="stat-card">
-              <span>{admin ? 'Pedidos' : 'Meus pedidos'}</span>
+              <span>{visaoComercial ? 'Pedidos' : 'Meus pedidos'}</span>
               <strong>{stats.pedidos.toLocaleString('pt-BR')}</strong>
-              <small>{admin ? 'todos os vendedores' : 'lançados por você'}</small>
+              <small>{visaoComercial ? 'todos os vendedores' : 'lançados por você'}</small>
             </div>
 
             <div className="stat-card">
@@ -112,7 +113,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
               <span>✓ Supabase Auth</span>
               <span>✓ Carteira por vendedor</span>
               <span>✓ Pedidos pelo criador</span>
-              <span>✓ ADMIN com visão geral</span>
+              <span>✓ Gestão com visão geral</span>
               <span>✓ Gravação por RPC</span>
             </div>
           </div>

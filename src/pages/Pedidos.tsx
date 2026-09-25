@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { PedidoItemBanco, PedidoResumo as PedidoResumoBase, UsuarioApp } from '../types'
@@ -7,6 +8,7 @@ import './Pedidos.css'
 
 // Permite atualizar esta tela mesmo se types.ts ainda for de um pacote anterior.
 type PedidoResumo = PedidoResumoBase & {
+  created_by: string
   cancelado_em?: string | null
   motivo_cancelamento?: string | null
 }
@@ -60,6 +62,7 @@ export function Pedidos({
   const [salvandoCancelamento, setSalvandoCancelamento] = useState(false)
 
   const admin = usuario.perfil === 'ADMIN'
+  const visaoComercial = temVisaoComercial(usuario)
 
   useEffect(() => {
     carregar()
@@ -75,6 +78,7 @@ export function Pedidos({
         id,
         numero,
         created_at,
+        created_by,
         status,
         cancelado_em,
         motivo_cancelamento,
@@ -228,9 +232,9 @@ export function Pedidos({
           <span className="eyebrow">
             {admin ? 'ADMINISTRAÇÃO' : 'COMERCIAL'}
           </span>
-          <h1>{admin ? 'Todos os pedidos' : 'Meus pedidos'}</h1>
+          <h1>{visaoComercial ? 'Todos os pedidos' : 'Meus pedidos'}</h1>
           <p>
-            {admin
+            {visaoComercial
               ? 'Pedidos de todos os vendedores.'
               : 'Somente pedidos criados pela sua conta.'}
             {' '}Horários de Brasília.
@@ -255,7 +259,8 @@ export function Pedidos({
             const filial = rel(pedido.filiais)
             const expandido = aberto === pedido.id
             const cancelado = Boolean(pedido.cancelado_em) || pedido.status === 'CANCELADO'
-            const podeCancelar = ['ABERTO', 'ENVIADO'].includes(pedido.status)
+            const podeOperar = visaoComercial || pedido.created_by === usuario.id
+            const podeCancelar = podeOperar && ['ABERTO', 'ENVIADO'].includes(pedido.status)
             const mostrandoCancelamento = cancelandoId === pedido.id
 
             return (
@@ -283,7 +288,7 @@ export function Pedidos({
                       </span>
                     </div>
 
-                    {admin && (
+                    {visaoComercial && (
                       <div>
                         <span className="order-label">Vendedor</span>
                         <strong>{vendedor?.nome || '—'}</strong>
@@ -314,12 +319,13 @@ export function Pedidos({
                     <button
                       type="button"
                       className="secondary-button duplicate-button"
+                      disabled={!podeOperar}
                       onClick={() => onDuplicar(pedido.id)}
                     >
                       Duplicar
                     </button>
 
-                    {!cancelado && (
+                    {!cancelado && podeOperar && (
                       <button
                         type="button"
                         className="danger-button"
@@ -490,7 +496,7 @@ export function Pedidos({
 
           {!pedidos.length && (
             <div className="empty-panel">
-              {admin
+              {visaoComercial
                 ? 'Ainda não existem pedidos.'
                 : 'Você ainda não lançou pedidos.'}
             </div>

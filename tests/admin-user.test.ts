@@ -41,7 +41,7 @@ test('Sem JWT e JWT inválido não iniciam cadastro', async () => {
   }
 })
 test('Vendedor, gerente e ADMIN inativo não criam contas', async () => {
-  for (const opt of [{ perfil: 'VENDEDOR' }, { perfil: 'GERENTE' }, { ativo: false }]) {
+  for (const opt of [{ perfil: 'VENDEDOR' }, { perfil: 'GERENTE' }, { perfil: 'DIRETOR' }, { ativo: false }]) {
     const f = fake(opt); const response = await handleCreateUser(request(), f.admin)
     assert.equal(response.status, 403); assert.equal(f.calls.length, 0)
   }
@@ -71,7 +71,7 @@ test('Conta só é liberada depois de perfil e auditoria; senha não retorna', a
   assert.ok(!resposta.includes(cadastro.senha)); assert.ok(!resposta.includes('colornet_criacao_id'))
 })
 test('ADMIN sem vendedor pode ser criado; GERENTE mantém perfil solicitado', async () => {
-  for (const perfil of ['ADMIN','GERENTE']) {
+  for (const perfil of ['ADMIN','GERENTE','DIRETOR']) {
     const f = fake(); assert.equal((await handleCreateUser(request({ ...cadastro, perfil, vendedor_id: null }), f.admin)).status, 201)
     assert.equal(f.calls[1].data.p_perfil, perfil)
   }
