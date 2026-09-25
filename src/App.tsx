@@ -16,6 +16,7 @@ import { NovaCotacaoV2 } from './pages/NovaCotacaoV2'
 import { Pedidos } from './pages/Pedidos'
 import { Cotacoes } from './pages/Cotacoes'
 import { Admin } from './pages/Admin'
+import { startsRecovery, cleanRecoveryUrl, clearRecovery } from './lib/recoveryContext'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -26,7 +27,8 @@ function App() {
   const [refreshPedidos, setRefreshPedidos] = useState(0)
   const [refreshCotacoes, setRefreshCotacoes] = useState(0)
   const [pedidoDuplicarId, setPedidoDuplicarId] = useState<string | null>(null)
-  const [recuperandoSenha, setRecuperandoSenha] = useState(window.location.hash.includes('type=recovery') || new URLSearchParams(window.location.search).get('type') === 'recovery')
+  const [recuperandoSenha, setRecuperandoSenha] = useState(startsRecovery)
+  const [solicitarRecuperacao, setSolicitarRecuperacao] = useState(false)
   const [mensagemLogin, setMensagemLogin] = useState('')
 
   useEffect(() => {
@@ -65,11 +67,15 @@ function App() {
   function pedidoCriado() { setRefreshPedidos((v) => v + 1) }
   function cotacaoCriada() { setRefreshCotacoes((v) => v + 1) }
   function duplicarPedido(id: string) { setPedidoDuplicarId(id); setTela('novo-pedido') }
-  function senhaConcluida() { setRecuperandoSenha(false); setSession(null); setUsuario(null); setMensagemLogin('Senha criada com sucesso. Agora entre com sua nova senha.'); window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}`) }
+  function senhaConcluida() { clearRecovery(); cleanRecoveryUrl(); setRecuperandoSenha(false); setSession(null); setUsuario(null); setSolicitarRecuperacao(false); setMensagemLogin('Senha criada com sucesso. Agora entre com sua nova senha.') }
+  async function solicitarNovoLink() {
+    await supabase.auth.signOut({ scope: 'local' })
+    clearRecovery(); cleanRecoveryUrl(); setSession(null); setUsuario(null); setMensagemLogin(''); setSolicitarRecuperacao(true); setRecuperandoSenha(false)
+  }
 
   if (carregando) return <div className="fullscreen-center"><Loading texto="Iniciando ColorNet..." /></div>
-  if (recuperandoSenha) return <NovaSenha onConcluido={senhaConcluida} />
-  if (!session) return <Login mensagemInicial={mensagemLogin} />
+  if (recuperandoSenha) return <NovaSenha onConcluido={senhaConcluida} onSolicitarNovo={solicitarNovoLink} />
+  if (!session) return <Login mensagemInicial={mensagemLogin} recuperar={solicitarRecuperacao} />
   if (!usuario) return <div className="fullscreen-center error-screen"><div className="alert error">{erro || 'Perfil não encontrado.'}</div><button className="primary-button" onClick={sair}>Voltar ao login</button></div>
 
   return <Layout usuario={usuario} tela={tela} setTela={setTela} onSair={sair}>
