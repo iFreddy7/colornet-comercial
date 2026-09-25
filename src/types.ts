@@ -1,4 +1,4 @@
-export type Perfil = 'VENDEDOR' | 'GERENTE' | 'ADMIN'
+export type Perfil = 'VENDEDOR' | 'GERENTE' | 'DIRETOR' | 'ADMIN'
 export type Moeda = 'USD' | 'BRL'
 
 export interface UsuarioApp {

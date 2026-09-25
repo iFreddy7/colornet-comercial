@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Filial } from '../types'
 import type { VendedorAdmin } from './AdminNovoUsuario'
 
-export function AdminExportacao({ vendedores, filiais }: { vendedores: VendedorAdmin[]; filiais: Filial[] }) {
+export function AdminExportacao({ vendedores, filiais, comercial = false }: { vendedores: VendedorAdmin[]; filiais: Filial[]; comercial?: boolean }) {
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
   const [vendedor, setVendedor] = useState('')
@@ -21,7 +21,7 @@ export function AdminExportacao({ vendedores, filiais }: { vendedores: VendedorA
     if (inicio && fim && inicio > fim) { setErro('A data final deve ser igual ou posterior à inicial.'); return }
     emAndamento.current = true; setExportando(true)
     try {
-      const { data, error } = await supabase.rpc('admin_exportar_pedidos_v1', {
+      const { data, error } = await supabase.rpc(comercial ? 'exportar_pedidos_comercial_v1' : 'admin_exportar_pedidos_v1', {
         p_data_inicio: inicio || null, p_data_fim: fim || null, p_vendedor_id: vendedor || null,
         p_filial_id: filial || null, p_status: status || null,
       })
@@ -45,7 +45,7 @@ export function AdminExportacao({ vendedores, filiais }: { vendedores: VendedorA
   }
 
   return <div className="form-card">
-    <div className="section-title"><span>↓</span><div><strong>Relatório de pedidos</strong><small>Excel completo com pedidos, itens, cancelamentos, reservas e registros de e-mail.</small></div></div>
+    <div className="section-title"><span>↓</span><div><strong>Relatório de pedidos</strong><small>{comercial ? 'Excel com pedidos de todos os vendedores, itens, cancelamentos e reservas.' : 'Excel completo com pedidos, itens, cancelamentos, reservas e registros de e-mail.'}</small></div></div>
     {erro && <div className="alert error" role="alert">{erro}</div>}
     {mensagem && <div className="alert success" role="status">{mensagem}</div>}
     <form onSubmit={exportar}>

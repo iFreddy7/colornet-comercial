@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useState, type ReactNode } from 'react'
 import type { UsuarioApp } from '../types'
 
@@ -8,6 +9,7 @@ export type Tela =
   | 'produtos'
   | 'clientes'
   | 'admin'
+  | 'relatorios'
   | 'nova-cotacao'
   | 'cotacoes'
 
@@ -22,6 +24,7 @@ interface LayoutProps {
 export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps) {
   const [menuAberto, setMenuAberto] = useState(false)
   const admin = usuario.perfil === 'ADMIN'
+  const visaoComercial = temVisaoComercial(usuario)
 
   function navegar(destino: Tela) {
     setTela(destino)
@@ -73,16 +76,21 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
             <span>＋</span>Novo Pedido
           </button>
           <button className={tela === 'pedidos' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('pedidos')}>
-            <span>≡</span>{admin ? 'Todos os Pedidos' : 'Meus Pedidos'}
+            <span>≡</span>{visaoComercial ? 'Todos os Pedidos' : 'Meus Pedidos'}
           </button>
           <button className={tela === 'nova-cotacao' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('nova-cotacao')}><span>＋</span>Nova Cotação / Lista</button>
-          <button className={tela === 'cotacoes' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('cotacoes')}><span>≡</span>{admin ? 'Todas as Cotações' : 'Minhas Cotações'}</button>
+          <button className={tela === 'cotacoes' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('cotacoes')}><span>≡</span>{visaoComercial ? 'Todas as Cotações' : 'Minhas Cotações'}</button>
           <button className={tela === 'produtos' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('produtos')}>
             <span>□</span>Produtos
           </button>
           <button className={tela === 'clientes' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('clientes')}>
-            <span>◎</span>{admin ? 'Todos os Clientes' : 'Minha Carteira'}
+            <span>◎</span>{visaoComercial ? 'Todos os Clientes' : 'Minha Carteira'}
           </button>
+          {visaoComercial && (
+            <button className={tela === 'relatorios' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('relatorios')}>
+              <span>↗</span>Relatórios
+            </button>
+          )}
           {admin && (
             <button className={tela === 'admin' ? 'nav-item active' : 'nav-item'} onClick={() => navegar('admin')}>
               <span>⚙</span>Painel ADMIN

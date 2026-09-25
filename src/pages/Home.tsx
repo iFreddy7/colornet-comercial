@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { DashboardStats, UsuarioApp } from '../types'
@@ -90,7 +91,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
   const [pedidosDashboard, setPedidosDashboard] = useState<PedidoDashboard[]>([])
   const [erro, setErro] = useState('')
 
-  const admin = usuario.perfil === 'ADMIN'
+  const admin = temVisaoComercial(usuario)
   const periodo = useMemo(() => periodoMesAtual(), [])
 
   useEffect(() => {
