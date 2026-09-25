@@ -1,3 +1,4 @@
+import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_ENV_LABEL } from '../lib/env'
@@ -209,7 +210,7 @@ export function NovoPedido({
   const fiscalSeq = useRef(0)
   const disponibilidadeSeq = useRef(0)
 
-  const admin = usuario.perfil === 'ADMIN'
+  const admin = temVisaoComercial(usuario)
   const clienteSelecionado = clientes.find((c) => c.id === clienteId) || null
   const preco = precoOf(produto)
   const filialSelecionada = filiais.find((f) => f.id === filialId) || null

@@ -131,7 +131,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
                     <td><strong>{item.nome || 'Sem nome'}</strong><small>{item.email || '—'}</small></td>
                     <td>
                       <select value={item.perfil} onChange={(e) => alterarLocal(item.id, { perfil: e.target.value as AdminUsuario['perfil'] })}>
-                        <option value="VENDEDOR">VENDEDOR</option><option value="GERENTE">GERENTE</option><option value="ADMIN">ADMIN</option>
+                        <option value="VENDEDOR">VENDEDOR</option><option value="GERENTE">GERENTE</option><option value="DIRETOR">DIRETOR</option><option value="ADMIN">ADMIN</option>
                       </select>
                     </td>
                     <td>

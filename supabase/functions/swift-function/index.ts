@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.116.0";
 
 Deno.serve(async (req) => {
   try {
@@ -77,24 +77,16 @@ Deno.serve(async (req) => {
 
         if (!authUser?.id) throw new Error("Usuário Auth criado sem UUID.");
 
-        const { data: perfilAtual } = await supabase
-          .from("usuarios")
-          .select("perfil")
-          .eq("id", authUser.id)
-          .maybeSingle();
-
-        const perfil = perfilAtual?.perfil === "ADMIN" ? "ADMIN" : "VENDEDOR";
-        const { error: erroPerfil } = await supabase.from("usuarios").upsert(
-          {
-            id: authUser.id,
-            nome: vendedor.nome,
-            email,
-            perfil,
-            vendedor_id: vendedor.id,
-            ativo: true,
-          },
-          { onConflict: "id" }
+        // Atualizações de vínculo não devem sobrescrever cargos definidos no portal.
+        const { error: erroCriarPerfil } = await supabase.from("usuarios").upsert(
+          { id: authUser.id, nome: vendedor.nome, email, perfil: "VENDEDOR",
+            vendedor_id: vendedor.id, ativo: true },
+          { onConflict: "id", ignoreDuplicates: true }
         );
+        if (erroCriarPerfil) throw erroCriarPerfil;
+        const { error: erroPerfil } = await supabase.from("usuarios")
+          .update({ nome: vendedor.nome, email, vendedor_id: vendedor.id })
+          .eq("id", authUser.id);
         if (erroPerfil) throw erroPerfil;
       } catch (erro) {
         resultado.erros.push({

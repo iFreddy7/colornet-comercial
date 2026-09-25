@@ -1,3 +1,5 @@
+import { Relatorios } from './pages/Relatorios'
+import { temVisaoComercial } from './lib/permissoes'
 import { useEffect, useState } from 'react'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
@@ -78,6 +80,7 @@ function App() {
     {tela === 'cotacoes' && <Cotacoes key={`cotacoes-${refreshCotacoes}`} usuario={usuario} />}
     {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
+    {tela === 'relatorios' && temVisaoComercial(usuario) && <Relatorios usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}
   </Layout>
 }
