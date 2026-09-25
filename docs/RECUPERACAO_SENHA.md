@@ -16,7 +16,15 @@ Na Vercel: Production deve publicar somente main com PRODUCAO e o Supabase de pr
 3. Publique e valide primeiro o novo frontend. Somente depois configure **Reset password** com o conteúdo de `supabase/templates/recovery.html`. O template usa RedirectTo e TokenHash, nunca uma URL fixa de localhost. Requests do portal sempre enviam RedirectTo. Para disparos manuais pelo painel, informe explicitamente o redirect do ambiente ou use o fluxo do portal.
 4. Configure também **Invite user** com `supabase/templates/invite.html`. Convites usam SiteURL (o portal estável do próprio projeto) e TokenHash com `type=invite`; funcionam pelo painel mesmo sem RedirectTo. Manter o convite padrão com ConfirmationURL ainda permite que verificadores automáticos consumam o link antes do usuário. Convites antigos não são alterados: emita um novo para uma conta ainda não confirmada; contas já confirmadas devem usar recuperação.
 5. Verifique o SMTP e a expiração configurada do token. Não aumente a validade para tentar mascarar links já consumidos. Desabilite o rastreamento de links no provedor SMTP.
-6. Na função administrativa `admin-gerar-link-senha`, APP_URL opcional deve ser a origem HTTPS estável do mesmo ambiente. Sem APP_URL, a função escolhe o Cloudflare correspondente ao project ref. Publique essa função apenas depois do frontend.
+6. Na função administrativa `admin-gerar-link-senha`, APP_URL opcional deve ser a origem HTTPS estável do mesmo ambiente. Sem APP_URL, a função escolhe Cloudflare na homologação e Vercel na produção, conforme a tabela acima. Publique essa função apenas depois do frontend.
+
+## Cadastros importados sem conta de acesso
+
+Copiar `public.usuarios` para homologação não copia as contas do Auth. O botão administrativo confere o ID e o e-mail da identidade antes de gerar o link. Sessão expirada, indisponibilidade e conta ausente têm mensagens próprias.
+
+Somente na homologação, um ADMIN ativo pode escolher **Criar acesso e gerar link** após a mensagem de conta ausente. A ação cria a identidade pelo Auth Admin API com o mesmo UUID e e-mail do cadastro, sem definir senha nem confirmar previamente o e-mail. O trigger `handle_new_auth_user` usa `ON CONFLICT(id) DO NOTHING`, preservando o perfil, vendedor e referências existentes. Um conflito de e-mail é bloqueado; não se remapeiam identidades automaticamente. A verificação do link de recuperação confirma o e-mail e permite que a própria pessoa defina a senha.
+
+A criação exige uma solicitação explícita e não está habilitada em produção. Não envia e-mail: o administrador compartilha o link com a pessoa correta. Se a conta for criada mas a geração falhar, uma nova tentativa reaproveita a identidade, sem apagar o cadastro. O link é temporário; gerar outro substitui o anterior.
 
 O código não consegue corrigir sozinho uma Site URL/allowlist remota incorreta: um redirect rejeitado pelo Supabase pode cair na Site URL. Configurar apenas VITE_* não modifica essas opções do Auth. O template e este documento são arquivos versionados; não aplicam automaticamente configuração ao projeto hospedado.
 
