@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.116.0'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +50,10 @@ Deno.serve(async (req) => {
     const pedidoId = body?.pedido_id
     if (!pedidoId) throw new Error('pedido_id obrigatório')
 
-    const { data: perfil } = await admin.from('usuarios').select('perfil,ativo').eq('id', userData.user.id).single()
+    const { data: perfil, error: perfilError } = await admin.from('usuarios').select('perfil,ativo').eq('id', userData.user.id).single()
+    if (perfilError || perfil?.ativo !== true) {
+      return Response.json({ erro: 'Usuário sem acesso ativo.' }, { status: 403, headers: cors })
+    }
     const { data: pedido, error: pe } = await admin.from('pedidos').select(`
       id,numero,created_at,created_by,moeda,subtotal,valor_ipi,total,transportadora,data_entrega,observacoes_transporte,observacoes,
       clientes (codigo,razao_social,municipio,uf),
