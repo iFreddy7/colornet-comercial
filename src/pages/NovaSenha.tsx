@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
+import { AuthLayout } from '../components/AuthLayout'
 import { authErrorMessage, INVALID_RECOVERY } from '../lib/passwordRecovery'
 import { cleanRecoveryUrl, clearRecovery, recoveryLink, recoveryMarker, rememberRecovery } from '../lib/recoveryContext'
 import { createRecoveryResolver } from '../lib/recoverySession'
@@ -67,20 +67,9 @@ export function NovaSenha({ onConcluido, onSolicitarNovo }: { onConcluido: () =>
   }
 
   return (
-    <div className="login-page">
-      <div className="login-decoration decoration-one" />
-      <div className="login-decoration decoration-two" />
-
+    <AuthLayout>
       <form className="login-card login-card-expanded" onSubmit={salvar}>
-        <div className="login-env-line"><span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span></div>
-        <div className="login-brand">
-          <div className="brand-mark large">C</div>
-          <div>
-            <h1>ColorNet</h1>
-            <p>Portal Comercial</p>
-          </div>
-        </div>
-
+        <span className="eyebrow">SEU ESPAÇO COLORNET</span>
         <div className="login-heading">
           <h2>Crie sua nova senha</h2>
           <p>
@@ -140,6 +129,6 @@ export function NovaSenha({ onConcluido, onSolicitarNovo }: { onConcluido: () =>
         {erro && <div className="alert error" role="alert">{erro}</div>}
         {estado !== 'validando' && <button type="button" className="login-back-button" disabled={carregando} onClick={onSolicitarNovo}>Solicitar novo link</button>}
       </form>
-    </div>
+    </AuthLayout>
   )
 }

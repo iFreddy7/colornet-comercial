@@ -1,4 +1,5 @@
 import { temVisaoComercial } from '../lib/permissoes'
+import { Icon } from '../components/Icon'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { DashboardStats, UsuarioApp } from '../types'
@@ -173,10 +174,10 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
   }, [pedidosDashboard])
 
   return (
-    <section className="page">
-      <div className="page-header">
+    <section className="page dashboard-page">
+      <div className="page-header dashboard-header">
         <div>
-          <span className="eyebrow">COLORNET COMERCIAL</span>
+          <span className="eyebrow">SEU PAINEL COMERCIAL</span>
           <h1>Olá, {usuario.nome || 'bem-vindo'}.</h1>
           <p>
             {admin
@@ -199,24 +200,28 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
         <>
           <div className="stats-grid dashboard-main-stats">
             <div className="stat-card dashboard-highlight">
+              <div className="metric-icon"><Icon name="orders" /></div>
               <span>{admin ? 'Pedidos ativos no mês' : 'Meus pedidos no mês'}</span>
               <strong>{stats.pedidos.toLocaleString('pt-BR')}</strong>
               <small>pedidos cancelados não entram</small>
             </div>
 
             <div className="stat-card dashboard-highlight">
+              <div className="metric-icon"><Icon name="money" /></div>
               <span>{admin ? 'NET do mês em US$' : 'Meu NET do mês em US$'}</span>
               <strong className="dashboard-money">{usd(netUsdTotal)}</strong>
               <small>soma NET em US$; pedidos BRL são convertidos pela PTAX registrada no dia</small>
             </div>
 
             <div className="stat-card">
+              <div className="metric-icon"><Icon name="clients" /></div>
               <span>{admin ? 'Clientes' : 'Minha carteira'}</span>
               <strong>{stats.clientes.toLocaleString('pt-BR')}</strong>
               <small>{admin ? 'todos os clientes' : 'clientes liberados para você'}</small>
             </div>
 
             <div className="stat-card">
+              <div className="metric-icon"><Icon name="products" /></div>
               <span>Produtos</span>
               <strong>{stats.produtos.toLocaleString('pt-BR')}</strong>
               <small>base comercial</small>
@@ -232,7 +237,7 @@ export function Home({ usuario }: { usuario: UsuarioApp }) {
           {admin ? (
             <div className="form-card dashboard-sellers">
               <div className="section-title">
-                <span>↗</span>
+                <span><Icon name="trend" /></span>
                 <div>
                   <strong>Desempenho por vendedor</strong>
                   <small>{periodo.label}: pedidos ativos e valor NET em dólar, com conversão histórica de pedidos em BRL.</small>
