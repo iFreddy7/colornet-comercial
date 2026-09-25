@@ -590,7 +590,7 @@ export function NovaCotacaoV2({
           <h1>Nova Cotação</h1>
           <p>Monte a proposta com NET e final, validade, prazo de pagamento e frete.</p>
         </div>
-        <div className="status-pill"><span className="status-dot" />Validação server-side</div>
+        <div className="status-pill"><span className="status-dot" />Validação automática</div>
       </div>
 
       {erro && <div className="alert error">{erro}</div>}

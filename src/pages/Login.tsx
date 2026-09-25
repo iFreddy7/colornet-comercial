@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
+import { AuthLayout } from '../components/AuthLayout'
 import { authErrorMessage, recoveryRedirect } from '../lib/passwordRecovery'
 
 type ModoLogin = 'login' | 'recuperar' | 'primeiro'
@@ -71,23 +71,12 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
   const recuperacao = modo !== 'login'
 
   return (
-    <div className="login-page">
-      <div className="login-decoration decoration-one" />
-      <div className="login-decoration decoration-two" />
-
+    <AuthLayout>
       <form
         className="login-card login-card-expanded"
         onSubmit={recuperacao ? enviarAcesso : entrar}
       >
-        <div className="login-env-line"><span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span></div>
-        <div className="login-brand">
-          <div className="brand-mark large">C</div>
-          <div>
-            <h1>ColorNet</h1>
-            <p>Portal Comercial</p>
-          </div>
-        </div>
-
+        <span className="eyebrow">SEU ESPAÇO COLORNET</span>
         <div className="login-heading">
           <h2>
             {modo === 'login'
@@ -185,6 +174,6 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
 
         <p className="login-note">ColorNet Comercial • acesso seguro</p>
       </form>
-    </div>
+    </AuthLayout>
   )
 }

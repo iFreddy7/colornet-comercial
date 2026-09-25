@@ -990,14 +990,13 @@ export function NovoPedido({
           <span className="eyebrow">{cotacao ? 'NOVA COTAÇÃO' : 'NOVO PEDIDO'} • {APP_ENV_LABEL}</span>
           <h1>{cotacao ? 'Nova Cotação / Lista de Preço' : 'Novo Pedido'}</h1>
           <p>
-            Cliente é filtrado pelo banco. O cálculo fiscal e a gravação final
-            são novamente validados no PostgreSQL.
+            Preencha os dados comerciais e adicione os produtos para preparar seu pedido.
           </p>
         </div>
 
         <div className="status-pill">
           <span className="status-dot" />
-          Validação server-side
+          Validação automática
         </div>
       </div>
 
@@ -1660,7 +1659,7 @@ export function NovoPedido({
           onClick={salvarPedido}
           disabled={salvando || !itens.length}
         >
-          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido no Supabase'}
+          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido'}
         </button>
       </div>
     </section>
