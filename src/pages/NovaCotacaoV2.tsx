@@ -1,4 +1,5 @@
 import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
+import { identificarFilial } from '../lib/filiaisFaturamento'
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -66,6 +67,8 @@ export function NovaCotacaoV2({
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [prazos, setPrazos] = useState<OpcaoCadastro[]>([])
   const [fretes, setFretes] = useState<OpcaoCadastro[]>([])
+  const [filiais, setFiliais] = useState<Array<{ id: string; codigo: string; nome: string; uf: string }>>([])
+  const [filialId, setFilialId] = useState('')
   const [vendedores, setVendedores] = useState<Array<{ id: string; nome: string }>>([])
   const [ptax, setPtax] = useState(0)
 
@@ -117,6 +120,7 @@ export function NovaCotacaoV2({
     setPrazoBusca(saved.fields.prazoBusca || '')
     setPrazoId(saved.fields.prazoId || '')
     setFreteId(saved.fields.freteId || '')
+    setFilialId(saved.fields.filialId || '')
     setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
     setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
     setObservacoes(saved.fields.observacoes || '')
@@ -135,8 +139,8 @@ export function NovaCotacaoV2({
   }
   const draft = useCommercialDraft(
     draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
-    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
-    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
+    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || filialId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
     !carregando, restaurarRascunho
   )
 
@@ -154,14 +158,14 @@ export function NovaCotacaoV2({
     fiscalSeq.current += 1
     setCalculo(null)
 
-    if (!clienteId || !produto?.id || n(precoEntrada) <= 0) {
+    if (!clienteId || !filialId || !produto?.id || n(precoEntrada) <= 0) {
       setCalculando(false)
       return
     }
 
     const timer = window.setTimeout(() => calcularFiscalAutomatico(), 350)
     return () => window.clearTimeout(timer)
-  }, [clienteId, produto?.id, entradaPreco, precoEntrada])
+  }, [clienteId, filialId, produto?.id, entradaPreco, precoEntrada])
 
   useEffect(() => {
     const termo = produtoBusca.trim()
@@ -181,7 +185,7 @@ export function NovaCotacaoV2({
     setCarregando(true)
     setErro('')
 
-    const [cli, pra, fre, cfg, vend] = await Promise.all([
+    const [cli, pra, fre, cfg, vend, fil] = await Promise.all([
       supabase
         .from('clientes')
         .select('id,codigo,loja,razao_social,nome_fantasia,municipio,uf,calculo_automatico,vendedor_id,ativo')
@@ -207,14 +211,16 @@ export function NovaCotacaoV2({
       admin
         ? supabase.from('vendedores').select('id,nome').eq('ativo', true).order('nome')
         : Promise.resolve({ data: [], error: null }),
+      supabase.from('filiais').select('id,codigo,nome,uf').eq('ativo', true).order('codigo'),
     ])
 
-    const firstError = cli.error || pra.error || fre.error || cfg.error || vend.error
+    const firstError = cli.error || pra.error || fre.error || cfg.error || vend.error || fil.error
     if (firstError) setErro(firstError.message)
 
     setClientes((cli.data ?? []) as Cliente[])
     setPrazos((pra.data ?? []) as OpcaoCadastro[])
     setFretes((fre.data ?? []) as OpcaoCadastro[])
+    setFiliais(fil.data ?? [])
     setVendedores((vend.data ?? []) as Array<{ id: string; nome: string }>)
 
     if (cfg.data?.valor != null) {
@@ -324,13 +330,17 @@ export function NovaCotacaoV2({
   async function calcularFiscalAutomatico() {
     const seq = ++fiscalSeq.current
     if (!clienteId || !produto || n(precoEntrada) <= 0) return null
+    if (!filiais.some(f => f.id === filialId)) {
+      setErro('Selecione a filial de faturamento antes de adicionar produtos.')
+      return null
+    }
 
     setCalculando(true)
     const { data, error } = await supabase
       .rpc('calcular_preco_comercial', {
         p_cliente_id: clienteId,
         p_produto_id: produto.id,
-        p_filial_id: null,
+        p_filial_id: filialId,
         p_preco_net: entradaPreco === 'NET' ? n(precoNet) : null,
         p_preco_final: entradaPreco === 'FINAL' ? n(precoFinal) : null,
         p_cotacao: true,
@@ -453,6 +463,8 @@ export function NovaCotacaoV2({
 
     if (!titulo.trim()) return setErro('Informe o título da cotação.')
     if (!clienteId) return setErro('Selecione o cliente.')
+    if (!filiais.some(f => f.id === filialId)) return setErro('Selecione a filial de faturamento.')
+    if (itens.some(item => item.filial_origem_id !== filialId)) return setErro('Há itens calculados para outra filial ou sem filial. Remova e adicione esses produtos novamente para revisar os preços.')
     if (!validade) return setErro('Informe a validade da proposta.')
     if (!prazoId) return setErro('Selecione o prazo de pagamento.')
     if (!freteId) return setErro('Selecione o tipo de frete: CIF ou FOB.')
@@ -467,7 +479,7 @@ export function NovaCotacaoV2({
     const cabecalho = {
       titulo: titulo.trim(),
       cliente_id: clienteId,
-      filial_id: null,
+      filial_id: filialId,
       moeda,
       prazo_pagamento_id: prazoId,
       frete_id: freteId,
@@ -603,7 +615,7 @@ export function NovaCotacaoV2({
           <span>1</span>
           <div>
             <strong>Dados comerciais</strong>
-            <small>Cliente, validade, prazo, frete, moeda e vendedor responsável.</small>
+            <small>Cliente, filial de faturamento, validade, prazo, frete, moeda e vendedor responsável.</small>
           </div>
         </div>
 
@@ -653,6 +665,19 @@ export function NovaCotacaoV2({
                 {clienteSelecionado.codigo} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
               </small>
             )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="cotacao-filial">Filial de faturamento *</label>
+            <select id="cotacao-filial" value={filialId} disabled={salvando || adicionandoRef.current || (itens.length > 0 && Boolean(filialId))} onChange={e => {
+              fiscalSeq.current += 1
+              setCalculo(null)
+              setFilialId(e.target.value)
+            }}>
+              <option value="">Selecione a filial</option>
+              {filiais.map(f => <option key={f.id} value={f.id}>{identificarFilial(f).nome}</option>)}
+            </select>
+            <small className="field-help">Os preços consideram a filial selecionada. Para trocar a filial, remova os itens primeiro.</small>
           </div>
 
           <div className="field">
