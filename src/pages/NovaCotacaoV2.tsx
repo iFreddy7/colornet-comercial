@@ -650,7 +650,7 @@ export function NovaCotacaoV2({
                     }}
                   >
                     <strong>{c.codigo} — {c.razao_social}</strong>
-                    <span>{[c.municipio, c.uf].filter(Boolean).join(' / ')}</span>
+                    <span>{c.loja ? `Loja ${c.loja} • ` : ''}{[c.municipio, c.uf].filter(Boolean).join(' / ')}</span>
                   </button>
                 ))}
                 {!clientesFiltrados.length && <div className="autocomplete-empty">Nenhum cliente disponível.</div>}
@@ -658,7 +658,7 @@ export function NovaCotacaoV2({
             )}
             {clienteSelecionado && (
               <small className="field-help">
-                {clienteSelecionado.codigo} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
+                {clienteSelecionado.codigo}{clienteSelecionado.loja ? ` • Loja ${clienteSelecionado.loja}` : ''} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
               </small>
             )}
           </div>

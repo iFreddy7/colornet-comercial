@@ -1032,7 +1032,7 @@ export function NovoPedido({
                     onClick={() => selecionarCliente(cliente)}
                   >
                     <strong>{cliente.codigo} — {cliente.razao_social}</strong>
-                    <span>{[cliente.municipio, cliente.uf].filter(Boolean).join(' / ')}</span>
+                    <span>{cliente.loja ? `Loja ${cliente.loja} • ` : ''}{[cliente.municipio, cliente.uf].filter(Boolean).join(' / ')}</span>
                   </button>
                 ))}
 
@@ -1046,7 +1046,7 @@ export function NovoPedido({
 
             {clienteSelecionado && (
               <small className="field-help">
-                {clienteSelecionado.codigo} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
+                {clienteSelecionado.codigo}{clienteSelecionado.loja ? ` • Loja ${clienteSelecionado.loja}` : ''} • {clienteSelecionado.municipio || '—'} / {clienteSelecionado.uf || '—'}
               </small>
             )}
           </div>
