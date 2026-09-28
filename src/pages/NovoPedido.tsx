@@ -1,4 +1,5 @@
 import { temVisaoComercial } from '../lib/permissoes'
+import { carregarClientesComerciais } from '../lib/clientesComerciais'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
@@ -378,12 +379,7 @@ export function NovoPedido({
     setErro('')
 
     const [cli, fil, pra, fre, cfg] = await Promise.all([
-      supabase
-        .from('clientes')
-        .select('id,codigo,loja,razao_social,nome_fantasia,municipio,uf,calculo_automatico,vendedor_id,ativo')
-        .eq('ativo', true)
-        .order('razao_social')
-        .limit(1500),
+      carregarClientesComerciais(supabase),
 
       supabase
         .from('filiais')

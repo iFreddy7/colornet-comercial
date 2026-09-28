@@ -1,5 +1,6 @@
 import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { identificarFilial } from '../lib/filiaisFaturamento'
+import { carregarClientesComerciais } from '../lib/clientesComerciais'
 import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -186,12 +187,7 @@ export function NovaCotacaoV2({
     setErro('')
 
     const [cli, pra, fre, cfg, vend, fil] = await Promise.all([
-      supabase
-        .from('clientes')
-        .select('id,codigo,loja,razao_social,nome_fantasia,municipio,uf,calculo_automatico,vendedor_id,ativo')
-        .eq('ativo', true)
-        .order('razao_social')
-        .limit(1500),
+      carregarClientesComerciais(supabase),
       supabase
         .from('prazos_pagamento')
         .select('id,codigo,descricao')
