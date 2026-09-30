@@ -30,8 +30,10 @@ test('Unchecked sessions survive reload in their tab but cannot reopen from pers
   assert.equal(createAuthStorage(key, () => local, memory).storage.getItem(key), null)
   // Another tab cannot turn this explicitly temporary session into a remembered one.
   local.setItem(`${key}:remember-me`, 'true')
+  local.setItem(key, 'new-remembered-login-in-another-tab')
   a.storage.setItem(key, 'refreshed-temporary-session')
-  assert.equal(local.getItem(key), null)
+  assert.equal(local.getItem(key), 'new-remembered-login-in-another-tab')
+  assert.equal(a.storage.getItem(key), 'refreshed-temporary-session')
 })
 
 test('Logout removes both session stores; project data and preferences remain isolated', () => {

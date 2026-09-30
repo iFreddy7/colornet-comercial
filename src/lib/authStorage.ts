@@ -47,7 +47,8 @@ export function createAuthStorage(
       const remember = getRememberMe()
       const target = remember ? local() : session()
       target.setItem(key, value)
-      removeFrom(remember ? session : local, key)
+      // Only a new explicit login clears the other store. A background refresh
+      // in a temporary tab must not erase a newer remembered login in another tab.
     },
     removeItem(key: string) {
       // Logout/recovery cleanup must not leave a session in the other store.
