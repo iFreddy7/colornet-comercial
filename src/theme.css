@@ -132,6 +132,10 @@ tbody tr:hover { background: #f8faff; }
 .auth-shell .login-card label { font-size: 12px; gap: 9px; margin-bottom: 21px; }
 .auth-shell .login-card input { min-height: 48px; font-size: 14px; padding: 13px 14px; }
 .auth-shell .login-card .primary-button { min-height: 48px; margin-top: 5px; font-size: 13px; }
+.auth-shell .login-remember { margin: -2px 0 20px; }
+.auth-shell .login-remember label { display: flex; align-items: center; gap: 10px; margin: 0; cursor: pointer; }
+.auth-shell .login-remember input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 0; flex: 0 0 18px; accent-color: var(--brand); }
+.auth-shell .login-remember p { margin: 6px 0 0 28px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .auth-shell .login-help-actions { justify-content: center; gap: 16px; margin: 20px 0 0; }
 .auth-shell .login-link-button { font-size: 12px; }
 .auth-shell .login-security-note { margin-top: 22px; border: 1px solid var(--line); border-radius: 9px; background: #f1f5fa; padding: 14px 16px; }
