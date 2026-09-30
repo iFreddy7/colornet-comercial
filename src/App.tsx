@@ -66,7 +66,7 @@ function App() {
     setCarregando(false)
   }
 
-  async function sair() { await supabase.auth.signOut() }
+  async function sair() { await supabase.auth.signOut({ scope: 'local' }) }
   function pedidoCriado() { setRefreshPedidos((v) => v + 1) }
   function cotacaoCriada() { setRefreshCotacoes((v) => v + 1) }
   function navegar(destino: Tela) { setPedidoDuplicarId(null); setCotacaoConverterId(null); setPedidoSession(v => v + 1); setTela(destino) }

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { IS_PRODUCTION } from './env'
 import { recoveryLink } from './recoveryContext'
+import { createAuthStorage } from './authStorage'
 
 const PROD_REF = 'duojavyrugezvlvuuwag'
 const HOMOLOG_REF = 'nqyddagfawklfqwumlie'
@@ -28,8 +29,15 @@ if (projectRef !== expectedRef) {
   )
 }
 
+const storageKey = `sb-${projectRef}-auth-token`
+export const loginPersistence = createAuthStorage(
+  storageKey, () => window.localStorage, () => window.sessionStorage,
+)
+
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
+    storageKey,
+    storage: loginPersistence.storage,
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: !recoveryLink.requested,

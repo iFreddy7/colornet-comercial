@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { loginPersistence, supabase } from '../lib/supabase'
 import { AuthLayout } from '../components/AuthLayout'
 import { authErrorMessage, recoveryRedirect } from '../lib/passwordRecovery'
 
@@ -9,6 +9,7 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
   const [modo, setModo] = useState<ModoLogin>(recuperar ? 'recuperar' : 'login')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
+  const [lembrar, setLembrar] = useState(loginPersistence.getRememberMe)
   const [erro, setErro] = useState('')
   const [mensagem, setMensagem] = useState(mensagemInicial)
   const [carregando, setCarregando] = useState(false)
@@ -26,20 +27,17 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
     setMensagem('')
     setCarregando(true)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: senha,
-    })
-
-    if (error) {
-      setErro(
-        error.message === 'Invalid login credentials'
-          ? 'E-mail ou senha inválidos.'
-          : error.message
-      )
-    }
-
-    setCarregando(false)
+    try {
+      loginPersistence.setRememberMe(lembrar)
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: senha,
+      })
+      if (error) setErro(error.message === 'Invalid login credentials'
+        ? 'E-mail ou senha inválidos.' : error.message)
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível entrar. Tente novamente.')
+    } finally { setCarregando(false) }
   }
 
   async function enviarAcesso(event: FormEvent) {
@@ -120,7 +118,19 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
           </label>
         )}
 
-        {erro && <div className="alert error">{erro}</div>}
+        {!recuperacao && (
+          <div className="login-remember">
+            <label>
+              <input type="checkbox" checked={lembrar} disabled={carregando}
+                onChange={(event) => setLembrar(event.target.checked)}
+                aria-describedby="remember-help" />
+              <span>Lembrar de mim neste dispositivo</span>
+            </label>
+            <p id="remember-help">Use apenas em um dispositivo de confiança.</p>
+          </div>
+        )}
+
+        {erro && <div className="alert error" role="alert">{erro}</div>}
         {mensagem && <div className="alert success">{mensagem}</div>}
 
         <button className="primary-button" disabled={carregando}>
