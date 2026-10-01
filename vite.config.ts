@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 
 const PROD_REF = 'duojavyrugezvlvuuwag'
 const HOMOLOG_REF = 'nqyddagfawklfqwumlie'
@@ -77,5 +79,20 @@ export default defineConfig(({ command, mode }) => {
     }
   }
 
-  return { plugins: [react()] }
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const production = ['PRODUCAO', 'PRODUCTION'].includes((env.VITE_APP_ENV || '').trim().toUpperCase())
+  return { plugins: [react(), {
+    name: 'colornet-installable-app',
+    generateBundle(_options, bundle) {
+      const version = createHash('sha256').update(Object.values(bundle).map(item => item.type === 'chunk' ? item.code : String(item.source)).join('')).digest('hex').slice(0, 16)
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: readFileSync('pwa/sw.js', 'utf8').replace('__BUILD_VERSION__', version) })
+      this.emitFile({ type: 'asset', fileName: 'manifest.webmanifest', source: JSON.stringify({
+        id: '/', name: production ? 'ColorNet Comercial' : 'ColorNet — Homologação',
+        short_name: production ? 'ColorNet' : 'ColorNet Teste', lang: 'pt-BR',
+        description: 'Clientes, cotações e pedidos da ColorNet.', start_url: '/', scope: '/',
+        display: 'standalone', background_color: '#f5f7fb', theme_color: '#19337f',
+        icons: [192, 512].map(size => ({ src: `/icons/colornet-${size}.png`, sizes: `${size}x${size}`, type: 'image/png', purpose: 'any' })),
+      }, null, 2) })
+    },
+  }] }
 })

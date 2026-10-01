@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import { BrandLogo } from './BrandLogo'
+import { InstallPwaButton } from './Pwa'
 import { Icon } from './Icon'
 
 export function AuthLayout({ children }: { children: ReactNode }) {
@@ -22,7 +23,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="auth-signature">ColorNet <span>•</span> a vinmar company</div>
         </section>
-        <div className="auth-form-area">{children}</div>
+        <div className="auth-form-area">{children}<InstallPwaButton /></div>
       </main>
       <footer className="auth-footer">ColorNet Comercial <span>Um espaço para conectar negócios.</span></footer>
     </div>

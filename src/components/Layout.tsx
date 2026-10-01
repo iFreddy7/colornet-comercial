@@ -3,6 +3,7 @@ import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { UsuarioApp } from '../types'
 import { BrandLogo } from './BrandLogo'
+import { InstallPwaButton } from './Pwa'
 import { Icon, type IconName } from './Icon'
 
 export type Tela = 'inicio' | 'novo-pedido' | 'pedidos' | 'produtos' | 'clientes' | 'admin' | 'relatorios' | 'nova-cotacao' | 'cotacoes'
@@ -90,6 +91,7 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
           {admin && <><p className="nav-group-title">ADMINISTRAÇÃO</p>{item('admin', 'Painel ADMIN', 'shield')}</>}
         </nav>
         <div className="sidebar-footer">
+          <InstallPwaButton onBeforeInstall={() => setMenuAberto(false)} />
           <div className="user-mini">
             <div className="avatar">{(usuario.nome || usuario.email || 'U').charAt(0).toUpperCase()}</div>
             <div><strong title={usuario.nome || usuario.email || undefined}>{usuario.nome || usuario.email}</strong><span>{usuario.perfil.toLowerCase()}</span></div>
