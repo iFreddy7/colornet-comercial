@@ -90,8 +90,8 @@ export function PwaProvider({ children }: { children: ReactNode }) {
   </InstallContext.Provider>
 }
 
-export function InstallPwaButton() {
+export function InstallPwaButton({ onBeforeInstall }: { onBeforeInstall?: () => void } = {}) {
   const { installed, install } = useContext(InstallContext)
   if (installed) return null
-  return <button type="button" className="pwa-install-button" onClick={install}>Instalar aplicativo</button>
+  return <button type="button" className="pwa-install-button" onClick={() => { onBeforeInstall?.(); install() }}>Instalar aplicativo</button>
 }
