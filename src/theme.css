@@ -212,7 +212,8 @@ tbody tr:hover { background: #f8faff; }
 /* Installable mobile portal: keep touch targets and device safe areas usable. */
 .pwa-install-button { min-height: 44px; padding: 11px 16px; border: 1px solid #dce3ee; border-radius: 9px; color: var(--brand); background: white; font-weight: 600; cursor: pointer; }
 .auth-form-area > .pwa-install-button { width: 100%; max-width: 450px; justify-self: start; margin: 12px 0; }
-.sidebar-footer > .pwa-install-button { width: 100%; margin-bottom: 16px; }
+.portal-shell .sidebar-footer { flex-wrap: wrap; }
+.sidebar-footer > .pwa-install-button { width: 100%; flex: 0 0 100%; margin-bottom: 8px; }
 .pwa-dialog { width: min(440px, calc(100vw - 48px)); max-height: calc(100dvh - 48px); box-sizing: border-box; padding: 26px; border: 1px solid #dce3ee; border-radius: 16px; color: var(--ink); box-shadow: 0 20px 80px #14294740; }
 .pwa-dialog::backdrop { background: #14294788; }
 .pwa-dialog h2 { margin: 0 0 16px; font-size: 23px; }
