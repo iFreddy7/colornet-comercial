@@ -208,3 +208,25 @@ tbody tr:hover { background: #f8faff; }
 .quote-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .quote-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
 .quote-review textarea { min-height: 110px; resize: vertical; }
+
+/* Installable mobile portal: keep touch targets and device safe areas usable. */
+.pwa-install-button { min-height: 44px; padding: 11px 16px; border: 1px solid #dce3ee; border-radius: 9px; color: var(--brand); background: white; font-weight: 600; cursor: pointer; }
+.auth-form-area > .pwa-install-button { width: 100%; max-width: 450px; justify-self: start; margin: 12px 0; }
+.sidebar-footer > .pwa-install-button { width: 100%; margin-bottom: 16px; }
+.pwa-dialog { width: min(440px, calc(100vw - 48px)); max-height: calc(100dvh - 48px); box-sizing: border-box; padding: 26px; border: 1px solid #dce3ee; border-radius: 16px; color: var(--ink); box-shadow: 0 20px 80px #14294740; }
+.pwa-dialog::backdrop { background: #14294788; }
+.pwa-dialog h2 { margin: 0 0 16px; font-size: 23px; }
+.pwa-dialog p, .pwa-dialog li { font-size: 14px; line-height: 1.7; color: #52647d; }
+.pwa-dialog li + li { margin-top: 15px; }
+.pwa-dialog ol { padding-left: 20px; }
+.pwa-status { position: fixed; z-index: 140; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(600px, calc(100% - 32px)); box-sizing: border-box; padding: 14px 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-radius: 12px; background: #19337f; color: white; box-shadow: 0 8px 30px #14294740; font-size: 13px; }
+.pwa-status span { flex: 1 1 260px; }
+.pwa-status button { min-height: 40px; padding: 8px 12px; border: 1px solid #ffffff70; border-radius: 7px; background: transparent; color: white; }
+@media (display-mode: standalone) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .portal-shell .main-content { padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (max-width: 900px) {
+  .auth-form-area > .pwa-install-button { max-width: 460px; justify-self: center; }
+  .auth-shell .login-card input:not([type="checkbox"]), .field input, .field select, .field textarea, .search-bar input, .product-search input { font-size: 16px; }
+}
