@@ -50,7 +50,7 @@ export function Cotacoes({usuario,onConverter}:{usuario:UsuarioApp;onConverter:(
   <div className="table-scroll"><table><thead><tr><th>Produto</th><th>NCM / Colour Index</th><th>Qtd.</th><th>NET</th><th>Final</th><th>IPI</th><th>Total</th></tr></thead>
   <tbody>{detalhe.itens.map((i,n)=><tr key={n}>
    <td>{i.produto}<small>{i.codigo}</small></td><td>{i.ncm||'—'}{i.colour_index&&<small>Colour Index: {i.colour_index}</small>}</td>
-   <td>{i.quantidade??'—'}</td><td>{i.preco_net==null?'—':new Intl.NumberFormat('pt-BR',{style:'currency',currency:detalhe.moeda,minimumFractionDigits:4,maximumFractionDigits:4}).format(i.preco_net)}</td>
+   <td>{i.quantidade??'—'}</td><td>{i.preco_net==null?'—':new Intl.NumberFormat('pt-BR',{style:'currency',currency:detalhe.moeda,minimumFractionDigits:2,maximumFractionDigits:2}).format(i.preco_net)}</td>
    <td>{moeda(i.preco_final,detalhe.moeda)}</td><td>{(i.ipi*100).toFixed(2)}%</td><td>{i.total_item==null?'—':moeda(i.total_item,detalhe.moeda)}</td>
   </tr>)}</tbody></table></div>
   {detalhe.total==null?<p>Lista de preços unitários, sem total geral.</p>:<p>Total: <strong>{moeda(detalhe.total,detalhe.moeda)}</strong></p>}<p>{detalhe.observacoes}</p>

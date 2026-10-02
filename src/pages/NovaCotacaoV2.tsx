@@ -818,7 +818,7 @@ export function NovaCotacaoV2({
                     onClick={() => escolherFaixa(key)}
                   >
                     <span>Preço sugerido {key}</span>
-                    <strong>{money(valorFaixa(n(value)), moeda, 4)}</strong>
+                    <strong>{money(valorFaixa(n(value)), moeda)}</strong>
                   </button>
                 ))}
               </div>
@@ -945,7 +945,7 @@ export function NovaCotacaoV2({
                     <small>Colour Index: {item.colour_index || 'Não informado'}</small>
                   </td>
                   <td>{item.quantidade == null ? '—' : item.quantidade.toLocaleString('pt-BR')}</td>
-                  <td>{money(item.preco_net, moeda, 4)}</td>
+                  <td>{money(item.preco_net, moeda)}</td>
                   <td>{money(item.preco_final, moeda)}</td>
                   <td>{item.aliquota_icms == null ? 'MANUAL' : `${(item.aliquota_icms * 100).toFixed(0)}%`}</td>
                   <td>{item.quantidade == null ? '—' : money(item.total_item, moeda)}</td>
