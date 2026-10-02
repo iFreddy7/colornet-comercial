@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import type { Produto, UsuarioApp } from '../types'
 import { Loading } from '../components/Loading'
 
+const TAMANHO_PAGINA = 60
+
 function money(value: number | null | undefined) {
   if (value == null) return '—'
   return new Intl.NumberFormat('pt-BR', {
@@ -21,60 +23,77 @@ export function Produtos({usuario}: {usuario: UsuarioApp}) {
   const [salvandoCI, setSalvandoCI] = useState(false)
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [busca, setBusca] = useState('')
+  const [filtro, setFiltro] = useState('')
+  const [pagina, setPagina] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [revisao, setRevisao] = useState(0)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    carregar('')
-  }, [])
+    let ativo = true
+    const controller = new AbortController()
+    async function carregar() {
+      setCarregando(true)
+      setErro('')
+      try {
+        const inicio = pagina * TAMANHO_PAGINA
 
-  async function carregar(termo: string) {
-    setCarregando(true)
-    setErro('')
+        let query = supabase
+          .from('produtos')
+          .select(`
+            id,
+            codigo_protheus,
+            nome,
+            ncm,
+            colour_index,
+            grupo_tributario,
+            status_fiscal,
+            fiscal_pendencia,
+            ativo,
+            precos (
+              faixa_1,
+              faixa_2,
+              faixa_3,
+              moeda
+            )
+          `, { count: 'exact' })
+          .eq('ativo', true)
+          .order('nome')
+          .order('id')
+          .range(inicio, inicio + TAMANHO_PAGINA - 1)
+          .abortSignal(controller.signal)
 
-    let query = supabase
-      .from('produtos')
-      .select(`
-        id,
-        codigo_protheus,
-        nome,
-        ncm,
-        colour_index,
-        grupo_tributario,
-        status_fiscal,
-        fiscal_pendencia,
-        ativo,
-        precos (
-          faixa_1,
-          faixa_2,
-          faixa_3,
-          moeda
-        )
-      `)
-      .eq('ativo', true)
-      .order('nome')
-      .limit(60)
+        if (filtro) {
+          const safe = filtro.replace(/[%(),]/g, ' ')
+          query = query.or(
+            `nome.ilike.%${safe}%,codigo_protheus.ilike.%${safe}%`
+          )
+        }
 
-    const filtro = termo.trim()
-
-    if (filtro) {
-      const safe = filtro.replace(/[%(),]/g, ' ')
-      query = query.or(
-        `nome.ilike.%${safe}%,codigo_protheus.ilike.%${safe}%`
-      )
+        const { data, error, count } = await query
+        if (!ativo) return
+        if (error) throw error
+        const encontrados = count ?? 0
+        const ultimaPagina = Math.max(0, Math.ceil(encontrados / TAMANHO_PAGINA) - 1)
+        if (pagina > ultimaPagina) {
+          setPagina(ultimaPagina)
+          return
+        }
+        setTotal(encontrados)
+        setProdutos((data ?? []) as Produto[])
+      } catch (error) {
+        if (!ativo) return
+        setErro(error instanceof Error ? error.message : 'Não foi possível carregar os produtos. Tente pesquisar novamente.')
+        setProdutos([])
+        setTotal(0)
+      } finally {
+        if (ativo) setCarregando(false)
+      }
     }
-
-    const { data, error } = await query
-
-    if (error) {
-      setErro(error.message)
-      setProdutos([])
-    } else {
-      setProdutos((data ?? []) as Produto[])
-    }
-
-    setCarregando(false)
-  }
+    void carregar()
+    return () => { ativo = false; controller.abort() }
+  }, [filtro, pagina, revisao])
 
   async function salvarColourIndex(event: FormEvent) {
     event.preventDefault()
@@ -90,7 +109,27 @@ export function Produtos({usuario}: {usuario: UsuarioApp}) {
 
   function pesquisar(event: FormEvent) {
     event.preventDefault()
-    carregar(busca)
+    setCarregando(true)
+    setPagina(0)
+    setFiltro(busca.trim())
+    setRevisao(atual => atual + 1)
+  }
+
+  const totalPaginas = Math.max(1, Math.ceil(total / TAMANHO_PAGINA))
+  function navegar(destino: number) {
+    setCarregando(true)
+    setPagina(destino)
+  }
+  function paginacao(posicao: string) {
+    return total > TAMANHO_PAGINA && <nav className="table-headline" aria-label={`Paginação de produtos ${posicao}`} style={{ flexWrap: 'wrap', gap: 12 }}>
+      <span>Página {pagina + 1} de {totalPaginas}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button type="button" className="secondary-button" disabled={carregando || pagina === 0} onClick={() => navegar(0)}>Primeira</button>
+        <button type="button" className="secondary-button" disabled={carregando || pagina === 0} onClick={() => navegar(pagina - 1)}>Anterior</button>
+        <button type="button" className="secondary-button" disabled={carregando || pagina >= totalPaginas - 1} onClick={() => navegar(pagina + 1)}>Próxima</button>
+        <button type="button" className="secondary-button" disabled={carregando || pagina >= totalPaginas - 1} onClick={() => navegar(totalPaginas - 1)}>Última</button>
+      </div>
+    </nav>
   }
 
   return (
@@ -99,13 +138,14 @@ export function Produtos({usuario}: {usuario: UsuarioApp}) {
         <div>
           <span className="eyebrow">CADASTRO</span>
           <h1>Produtos</h1>
-          <p>Pesquisa direta no PostgreSQL com as faixas NET vinculadas.</p>
+          <p>Consulte o catálogo completo e as faixas de preço por nome ou código.</p>
         </div>
       </div>
 
       <form className="search-bar" onSubmit={pesquisar}>
         <input
           value={busca}
+          aria-label="Nome ou código do produto"
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Digite nome ou código do produto..."
         />
@@ -123,10 +163,11 @@ export function Produtos({usuario}: {usuario: UsuarioApp}) {
         <Loading texto="Buscando produtos..." />
       ) : (
         <div className="table-card">
-          <div className="table-headline">
-            <strong>{produtos.length} produto(s)</strong>
-            <span>máximo de 60 por pesquisa</span>
+          <div className="table-headline" role="status" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <strong>{total.toLocaleString('pt-BR')} produto(s) encontrado(s)</strong>
+            <span>{total > 0 ? `Exibindo ${pagina * TAMANHO_PAGINA + 1} a ${pagina * TAMANHO_PAGINA + produtos.length} de ${total.toLocaleString('pt-BR')}` : 'Nenhum resultado'}</span>
           </div>
+          {paginacao('acima da tabela')}
 
           <div className="table-scroll">
             <table>
@@ -186,6 +227,7 @@ export function Produtos({usuario}: {usuario: UsuarioApp}) {
               </tbody>
             </table>
           </div>
+          {paginacao('abaixo da tabela')}
         </div>
       )}
     </section>
