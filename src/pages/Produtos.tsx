@@ -6,8 +6,8 @@ import { Loading } from '../components/Loading'
 function money(value: number | null | undefined) {
   if (value == null) return '—'
   return new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value)
 }
 
