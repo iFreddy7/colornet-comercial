@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
           <div style="font-size:11px;color:#64728a">Colour Index: ${esc(item.colour_index || 'Não informado')}</div>
         </td>
         <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${item.quantidade == null ? '—' : Number(item.quantidade).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td>
-        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${money(item.preco_net, cotacao.moeda, 4)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${money(item.preco_net, cotacao.moeda)}</td>
         <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${money(item.preco_final, cotacao.moeda)}</td>
         <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right"><b>${percentual(item.aliquota_icms)}</b></td>
         <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">${(Number(item.ipi || 0) * 100).toFixed(2)}%</td>

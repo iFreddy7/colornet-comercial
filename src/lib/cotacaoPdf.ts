@@ -110,7 +110,7 @@ export function criarPdfCotacao(original: DocumentoCotacao) {
  body:c.itens.map(i=>[
   [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.ipi>0?`IPI: ${pct(i.ipi)}`:'',varios?`Faturamento: ${i.filial_faturamento?.nome||'A confirmar'}`:''].filter(Boolean).join('\n'),
   ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
-  i.preco_net==null?'-':money(i.preco_net,4),money(i.preco_final),icms(i.aliquota_icms),
+  i.preco_net==null?'-':money(i.preco_net),money(i.preco_final),icms(i.aliquota_icms),
   ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
  styles:{font:'Colornet',fontSize:8,cellPadding:3,textColor:colors.ink,lineColor:colors.line,overflow:'linebreak'},headStyles:{fillColor:colors.brand,textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:colors.canvas},
  columnStyles:temQuantidade?{0:{cellWidth:58},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right'}}:{0:{cellWidth:88},1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},rowPageBreak:'avoid'})
