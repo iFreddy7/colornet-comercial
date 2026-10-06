@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { filtrarForecast, agruparForecastClientes } from '../src/lib/forecastDraft.ts'
 import { exemploForecast, lerForecast, mesesForecast, mesAtualForecast, quantidadeForecast, totalForecast, totalInformadoForecast } from '../src/lib/forecastDraft.ts'
 
 test('Forecast cobre doze meses sem perder a virada de ano e usa o mês de Brasília', () => {
@@ -15,6 +16,19 @@ test('Vazio difere de zero, vírgula decimal é aceita e quantidades inválidas 
   assert.equal(quantidadeForecast('0'), 0)
   assert.equal(quantidadeForecast('125,375'), 125.375)
   for (const valor of ['-1', 'Infinity', '1e5', '12.1234', '1000000000', '=2+3', 'abc']) assert.equal(quantidadeForecast(valor), null)
+})
+test('Filtros de vendedor, cliente e código são combinados antes de agrupar os clientes', () => {
+  const linhas = exemploForecast('2026-10', ['a', 'b'])
+  linhas.push({ ...linhas[0], id: 'segundo-vendedor', vendedorId: 'b', quantidades: { '2026-10': '100' } })
+  const grupos = agruparForecastClientes(linhas)
+  assert.equal(grupos.length, 3)
+  assert.equal(grupos.find(g => g.clienteId === 'cliente-a')?.linhas.length, 3)
+  const filtradas = filtrarForecast(linhas, { vendedorId: 'b', clienteId: 'cliente-a', produtoId: 'produto-a' })
+  assert.equal(filtradas.length, 1)
+  assert.equal(totalForecast(filtradas, ['2026-10']), 100)
+  assert.equal(agruparForecastClientes(filtradas).length, 1)
+  assert.equal(filtrarForecast(linhas, { clienteId: 'cliente-b', produtoId: 'produto-a' }).length, 0)
+  assert.equal(filtrarForecast(linhas, { vendedorId: 'a' }).some(l => l.vendedorId === 'b'), false)
 })
 test('Consolidado soma clientes sem unir códigos diferentes e respeita o período filtrado', () => {
   const linhas = exemploForecast('2026-10', ['a', 'b'])

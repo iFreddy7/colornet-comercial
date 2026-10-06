@@ -6,6 +6,18 @@ export interface ForecastLinha {
   quantidades: Record<string, string>
 }
 export interface ForecastCadastro { id: string; nome: string; codigo: string }
+export function filtrarForecast(linhas: ForecastLinha[], filtros: { vendedorId?: string; clienteId?: string; produtoId?: string }) {
+  return linhas.filter(l => (!filtros.vendedorId || l.vendedorId === filtros.vendedorId) && (!filtros.clienteId || l.clienteId === filtros.clienteId) && (!filtros.produtoId || l.produtoId === filtros.produtoId))
+}
+export function agruparForecastClientes(linhas: ForecastLinha[]) {
+  const grupos = new Map<string, ForecastLinha[]>()
+  for (const linha of linhas) {
+    const grupo = grupos.get(linha.clienteId) || []
+    grupo.push(linha)
+    grupos.set(linha.clienteId, grupo)
+  }
+  return Array.from(grupos, ([clienteId, itens]) => ({ clienteId, linhas: itens }))
+}
 export const clientesExemplo: ForecastCadastro[] = [
   { id: 'cliente-a', nome: 'Cliente exemplo A', codigo: 'DEMO-001' },
   { id: 'cliente-b', nome: 'Cliente exemplo B', codigo: 'DEMO-002' },
