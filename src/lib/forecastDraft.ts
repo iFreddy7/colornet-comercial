@@ -64,14 +64,14 @@ export function exemploForecast(inicio: string, vendedores: string[]): ForecastL
   return linhas.map((linha, index) => ({ id: `exemplo-${index}`, vendedorId: linha.vendedorId, clienteId: linha.clienteId, produtoId: linha.produtoId,
     quantidades: Object.fromEntries(meses.slice(0, 6).map((mes, i) => [mes.id, String(linha.base + i * 25)])) }))
 }
-export function lerForecast(raw: string | null, vendedores: string[]): { linhas: ForecastLinha[]; salvoEm: string } | null {
+export function lerForecast(raw: string | null, vendedores: string[], clientes = clientesExemplo, produtos = produtosExemplo): { linhas: ForecastLinha[]; salvoEm: string } | null {
   if (!raw || raw.length > 1_000_000) return null
   try {
     const valor = JSON.parse(raw)
     if (valor.version !== 1 || !Array.isArray(valor.linhas) || valor.linhas.length > 200 || typeof valor.salvoEm !== 'string' || !Number.isFinite(Date.parse(valor.salvoEm))) return null
     const ids = new Set<string>(), combinacoes = new Set<string>()
     for (const linha of valor.linhas) {
-      if (!linha || typeof linha.id !== 'string' || ids.has(linha.id) || !vendedores.includes(linha.vendedorId) || !clientesExemplo.some(c => c.id === linha.clienteId) || !produtosExemplo.some(p => p.id === linha.produtoId)) return null
+      if (!linha || typeof linha.id !== 'string' || ids.has(linha.id) || !vendedores.includes(linha.vendedorId) || !clientes.some(c => c.id === linha.clienteId) || !produtos.some(p => p.id === linha.produtoId)) return null
       const chave = `${linha.vendedorId}:${linha.clienteId}:${linha.produtoId}`
       if (combinacoes.has(chave) || !linha.quantidades || typeof linha.quantidades !== 'object' || Array.isArray(linha.quantidades)) return null
       if (Object.entries(linha.quantidades).some(([mes, qtd]) => !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes) || typeof qtd !== 'string' || qtd.length > 20)) return null
@@ -96,9 +96,9 @@ export function atualizarForecastPeriodo(base: ForecastLinha[], itens: ForecastL
   }
   return [...outras, ...atualizadas]
 }
-export function colunasRelatorioForecast(linhas: ForecastLinha[], meses: ReturnType<typeof mesesForecast>, vendedores: { id: string; nome: string }[]) {
+export function colunasRelatorioForecast(linhas: ForecastLinha[], meses: ReturnType<typeof mesesForecast>, vendedores: { id: string; nome: string }[], clientes = clientesExemplo, produtos = produtosExemplo) {
   return {
     cabecalho: ['Vendedor', 'Cliente', 'Código cliente', 'Produto', 'Código produto', ...meses.map(m => m.label + ' (kg)'), 'Total (kg)'],
-    linhas: linhas.map(l => [vendedores.find(v => v.id === l.vendedorId)?.nome || '', clientesExemplo.find(c => c.id === l.clienteId)?.nome || '', clientesExemplo.find(c => c.id === l.clienteId)?.codigo || '', produtosExemplo.find(p => p.id === l.produtoId)?.nome || '', produtosExemplo.find(p => p.id === l.produtoId)?.codigo || '', ...meses.map(m => quantidadeForecast(l.quantidades[m.id])), totalInformadoForecast([l], meses.map(m => m.id))]),
+    linhas: linhas.map(l => [vendedores.find(v => v.id === l.vendedorId)?.nome || '', clientes.find(c => c.id === l.clienteId)?.nome || '', clientes.find(c => c.id === l.clienteId)?.codigo || '', produtos.find(p => p.id === l.produtoId)?.nome || '', produtos.find(p => p.id === l.produtoId)?.codigo || '', ...meses.map(m => quantidadeForecast(l.quantidades[m.id])), totalInformadoForecast([l], meses.map(m => m.id))]),
   }
 }

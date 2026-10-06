@@ -20,8 +20,8 @@ import { ConverterCotacao } from './pages/ConverterCotacao'
 import { Admin } from './pages/Admin'
 import { startsRecovery, cleanRecoveryUrl, clearRecovery } from './lib/recoveryContext'
 
-const Forecast = lazy(() => import('./pages/Forecast').then(module => ({ default: module.Forecast })))
-const LancarForecast = lazy(() => import('./pages/LancarForecast').then(module => ({ default: module.LancarForecast })))
+const Forecast = lazy(() => import('./pages/ForecastConectado').then(module => ({ default: module.ConsultarForecastSupabase })))
+const LancarForecast = lazy(() => import('./pages/ForecastConectado').then(module => ({ default: module.LancarForecastSupabase })))
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)

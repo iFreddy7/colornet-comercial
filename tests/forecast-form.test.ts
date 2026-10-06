@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { atualizarForecastPeriodo, colunasRelatorioForecast, exemploForecast, mesesForecast } from '../src/lib/forecastDraft.ts'
+
+test('Relatório utiliza os cadastros recebidos do banco e mantém variantes separadas',()=>{
+  const produtos=[{id:'uuid-p1',nome:'Produto igual',codigo:'AD010.2BD25'},{id:'uuid-p2',nome:'Produto igual',codigo:'AD010.7BD25'}]
+  const linhas=produtos.map(p=>({id:p.id,produtoId:p.id,clienteId:'uuid-c',vendedorId:'uuid-v',quantidades:{'2026-10':'12,5'}}))
+  const relatorio=colunasRelatorioForecast(linhas,mesesForecast('2026-10'),[{id:'uuid-v',nome:'Responsável cadastrado'}],[{id:'uuid-c',nome:'Cliente cadastrado',codigo:'000123 / 01'}],produtos)
+  assert.deepEqual(relatorio.linhas.map(l=>l.slice(0,6)),produtos.map(p=>['Responsável cadastrado','Cliente cadastrado','000123 / 01','Produto igual',p.codigo,12.5]))
+})
 test('Salvar substitui apenas o cliente, vendedor e meses selecionados, preservando os demais', () => {
   const base = exemploForecast('2026-10', ['a', 'b'])
   base[0].quantidades['2026-09'] = '75'

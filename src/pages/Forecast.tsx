@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import type { UsuarioApp } from '../types'
-import { APP_ENV_LABEL } from '../lib/env'
 import { temVisaoComercial } from '../lib/permissoes'
-import { clientesExemplo, produtosExemplo, exemploForecast, lerForecast, mesesForecast, mesAtualForecast, quantidadeForecast, totalForecast, totalInformadoForecast, filtrarForecast, agruparForecastClientes, colunasRelatorioForecast, type ForecastLinha } from '../lib/forecastDraft'
+import { mesesForecast, mesAtualForecast, quantidadeForecast, totalForecast, totalInformadoForecast, filtrarForecast, agruparForecastClientes, colunasRelatorioForecast, type ForecastLinha } from '../lib/forecastDraft'
+import { linhasDosPlanos, type ForecastDados } from '../lib/forecastSupabase'
 import './forecast.css'
 const kg = (valor: number) => valor.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 const somaExibida = (linhas: ForecastLinha[], meses: string[]) => { const valor = totalInformadoForecast(linhas, meses); return valor == null ? '—' : kg(valor) }
 type Vendedor = { id: string; nome: string }
 type Mes = ReturnType<typeof mesesForecast>[number]
 
-function TabelaMensal({ linhas, meses, vendedores, editar, remover }: {
-  linhas: ForecastLinha[]; meses: Mes[]; vendedores: Vendedor[]
+function TabelaMensal({ linhas, meses, vendedores, produtos, editar, remover }: {
+  linhas: ForecastLinha[]; meses: Mes[]; vendedores: Vendedor[]; produtos: ForecastDados['produtos']
   editar?: (id: string, mes: string, valor: string) => void
   remover?: (id: string) => void
 }) {
@@ -18,7 +18,7 @@ function TabelaMensal({ linhas, meses, vendedores, editar, remover }: {
   return <div className="forecast-table-wrap" tabIndex={0} role="region" aria-label="Produtos e quantidades mensais">
     <table className="forecast-table"><thead><tr><th scope="col">Produto</th>{meses.map(m => <th scope="col" key={m.id}>{m.label}<small>kg</small></th>)}<th scope="col">Total kg</th>{remover && <th scope="col">Ações</th>}</tr></thead>
       <tbody>{linhas.map(linha => {
-        const produto = produtosExemplo.find(p => p.id === linha.produtoId)!
+        const produto = produtos.find(p => p.id === linha.produtoId) || {nome: 'Produto indisponível no cadastro', codigo: linha.produtoId}
         const vendedor = vendedores.find(v => v.id === linha.vendedorId)?.nome || ''
         return <tr key={linha.id}><th scope="row"><strong>{produto.nome}</strong><code>{produto.codigo}</code><small>{vendedor}</small></th>
           {meses.map(m => {
@@ -35,16 +35,13 @@ function TabelaMensal({ linhas, meses, vendedores, editar, remover }: {
 }
 
 
-export function Forecast({ usuario }: { usuario: UsuarioApp }) {
+export function Forecast({ usuario, dados }: { usuario: UsuarioApp; dados: ForecastDados }) {
   const gestao = temVisaoComercial(usuario)
-  const vendedores = gestao ? [{ id: 'demo-a', nome: 'Vendedor exemplo A' }, { id: 'demo-b', nome: 'Vendedor exemplo B' }] : [{ id: usuario.id, nome: usuario.nome || 'Minha previsão' }]
-  const storageKey = 'colornet:forecast-demo:v1:' + APP_ENV_LABEL + ':' + usuario.id + ':' + usuario.perfil
+  const vendedores = dados.vendedores
+  const clientesCadastro = dados.clientes
+  const produtosCadastro = dados.produtos
   const [inicio, setInicio] = useState(mesAtualForecast)
-  const [inicial] = useState(() => {
-    try { return { linhas: lerForecast(localStorage.getItem(storageKey), vendedores.map(v => v.id))?.linhas ?? exemploForecast(mesAtualForecast(), vendedores.map(v => v.id)), erro: '' } }
-    catch { return { linhas: [] as ForecastLinha[], erro: 'Não foi possível acessar as previsões salvas neste navegador.' } }
-  })
-  const linhas = inicial.linhas
+  const linhas = linhasDosPlanos(dados.planos)
   const [aviso, setAviso] = useState('')
   const [aba, setAba] = useState<'clientes' | 'consolidado' | 'relatorio'>('clientes')
   const [clienteFiltro, setClienteFiltro] = useState('')
@@ -53,12 +50,12 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
   const [exportando, setExportando] = useState(false)
   const meses = useMemo(() => mesesForecast(inicio), [inicio])
   const idsMeses = meses.map(m => m.id)
-  const visiveis = filtrarForecast(linhas, { clienteId: clienteFiltro, produtoId: produtoFiltro, vendedorId: gestao ? vendedorFiltro : usuario.id })
+  const visiveis = filtrarForecast(linhas, { clienteId: clienteFiltro, produtoId: produtoFiltro, vendedorId: gestao ? vendedorFiltro : (usuario.vendedor_id || 'sem-vendedor') })
   const preenchidas = visiveis.reduce((n, linha) => n + meses.filter(m => quantidadeForecast(linha.quantidades[m.id]) !== null).length, 0)
   const invalidas = visiveis.some(linha => meses.some(m => Boolean(linha.quantidades[m.id]?.trim()) && quantidadeForecast(linha.quantidades[m.id]) === null))
-  const grupos = produtosExemplo.map(produto => ({ produto, linhas: visiveis.filter(linha => linha.produtoId === produto.id) })).filter(grupo => grupo.linhas.length)
+  const grupos = produtosCadastro.map(produto => ({ produto, linhas: visiveis.filter(linha => linha.produtoId === produto.id) })).filter(grupo => grupo.linhas.length)
   const clientes = agruparForecastClientes(visiveis)
-  const relatorio = colunasRelatorioForecast(visiveis, meses, vendedores)
+  const relatorio = colunasRelatorioForecast(visiveis, meses, vendedores, clientesCadastro, produtosCadastro)
   const total = totalForecast(visiveis, idsMeses)
   const maximoMes = Math.max(1, ...idsMeses.map(mes => totalForecast(visiveis, [mes])))
   async function exportar() {
@@ -70,7 +67,7 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
       const detalhe = workbook.addWorksheet('Relatório forecast')
       detalhe.addRows([relatorio.cabecalho, ...relatorio.linhas])
       const sobre = workbook.addWorksheet('Leia primeiro')
-      sobre.addRows([['COLORNET — FORECAST DEMONSTRATIVO'], ['Dados fictícios para avaliação do rascunho da homologação.'], ['Não representa previsões reais ou pedidos.'], ['Unidade', 'kg'], ['Período', `${meses[0].label} a ${meses[11].label}`], ['Cliente', clientesExemplo.find(c => c.id === clienteFiltro)?.nome || 'Todos'], ['Produto', produtosExemplo.find(p => p.id === produtoFiltro)?.codigo || 'Todos'], ['Vendedor', vendedores.find(v => v.id === (gestao ? vendedorFiltro : usuario.id))?.nome || 'Todos disponíveis'], ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })]])
+      sobre.addRows([['COLORNET — FORECAST — HOMOLOGAÇÃO'], ['Previsões de teste salvas no Supabase da homologação.'], ['Ambiente de testes. Este relatório não gera pedidos ou movimentações de estoque.'], ['Unidade', 'kg'], ['Período', `${meses[0].label} a ${meses[11].label}`], ['Cliente', clientesCadastro.find(c => c.id === clienteFiltro)?.nome || 'Todos'], ['Produto', produtosCadastro.find(p => p.id === produtoFiltro)?.codigo || 'Todos'], ['Vendedor', vendedores.find(v => v.id === (gestao ? vendedorFiltro : (usuario.vendedor_id || 'sem-vendedor')))?.nome || 'Todos disponíveis'], ['Gerado em', new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })]])
       sobre.getColumn(1).width = 75; sobre.getColumn(2).width = 42
       const consolidado = workbook.addWorksheet('Consolidado por produto')
       consolidado.addRow(['Produto', 'Código produto', ...meses.map(m => m.label), 'Total kg'])
@@ -84,17 +81,16 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
       }
       const buffer = await workbook.xlsx.writeBuffer()
       const url = URL.createObjectURL(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-      const link = document.createElement('a'); link.href = url; link.download = `ColorNet_Forecast_DEMONSTRATIVO_${inicio}.xlsx`; link.click()
+      const link = document.createElement('a'); link.href = url; link.download = `ColorNet_Forecast_HOMOLOGACAO_${inicio}.xlsx`; link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      setAviso('Excel gerado com os filtros selecionados e a identificação de dados demonstrativos.')
+      setAviso('Relatório Excel gerado com as previsões da homologação e os filtros selecionados.')
     } catch { setAviso('Não foi possível gerar o Excel. Tente novamente.') }
     finally { setExportando(false) }
   }
   return <section className="page forecast-page">
     <div className="page-header"><div><span className="eyebrow">PLANEJAMENTO COMERCIAL</span><h1>Consultar forecast</h1><p>Analise as previsões e gere o relatório por vendedor, cliente, produto e mês.</p></div>
       <button type="button" className="secondary-button" onClick={exportar} disabled={exportando || invalidas || !visiveis.length}>{exportando ? 'Gerando Excel...' : 'Gerar relatório Excel'}</button></div>
-    <div className="forecast-demo"><strong>Rascunho demonstrativo · homologação</strong><p>Dados de exemplo. As alterações ficam apenas neste navegador, para este usuário, e ainda não são compartilhadas com outros usuários.</p></div>
-    {inicial.erro && <div className="alert error" role="alert">{inicial.erro}</div>}
+    <div className="forecast-demo"><strong>Forecast em teste · homologação</strong><p>Previsões salvas no Supabase da homologação, disponíveis conforme as permissões do seu perfil. Para incluir ou editar, use Lançar forecast.</p></div>
     {aviso && <div className="alert" role="status">{aviso}</div>}
     <div className="forecast-toolbar"><div className="forecast-tabs" aria-label="Visualização do forecast">
       <button type="button" aria-pressed={aba === 'clientes'} onClick={() => { setAba('clientes'); setAviso('') }}>Por cliente</button>
@@ -105,8 +101,8 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
     <>
       <div className="form-card forecast-filter-card"><div className="forecast-filters">
         {gestao && <label>Filtrar por vendedor<select value={vendedorFiltro} onChange={e => setVendedorFiltro(e.target.value)}><option value="">Todos os vendedores</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}</select></label>}
-        <label>Filtrar por cliente<select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}><option value="">Todos os clientes</option>{clientesExemplo.map(c => <option key={c.id} value={c.id}>{c.nome} · {c.codigo}</option>)}</select></label>
-        <label>Filtrar por produto<select value={produtoFiltro} onChange={e => setProdutoFiltro(e.target.value)}><option value="">Todos os produtos</option>{produtosExemplo.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.codigo}</option>)}</select></label>
+        <label>Filtrar por cliente<select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}><option value="">Todos os clientes</option>{clientesCadastro.map(c => <option key={c.id} value={c.id}>{c.nome} · {c.codigo}</option>)}</select></label>
+        <label>Filtrar por produto<select value={produtoFiltro} onChange={e => setProdutoFiltro(e.target.value)}><option value="">Todos os produtos</option>{produtosCadastro.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.codigo}</option>)}</select></label>
         <button type="button" className="secondary-button" onClick={() => { setClienteFiltro(''); setProdutoFiltro(''); setVendedorFiltro('') }}>Limpar filtros</button>
       </div></div>
       <div className="forecast-metrics">
@@ -123,7 +119,7 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
       <div className="forecast-grid-heading"><div><h2>Previsões por cliente</h2><p>Clique no cliente para consultar os produtos e as quantidades mensais. Os filtros se aplicam também aos detalhes.</p></div><span>{meses[0].label} — {meses[11].label}</span></div>
       <div className="forecast-client-head" aria-hidden="true"><span>Cliente / responsável</span><span>Produtos</span><span>Total previsto</span><span /></div>
       {clientes.map(grupo => {
-        const cliente = clientesExemplo.find(c => c.id === grupo.clienteId)!
+        const cliente = clientesCadastro.find(c => c.id === grupo.clienteId)!
         const responsaveis = vendedores.filter(v => grupo.linhas.some(l => l.vendedorId === v.id))
         return <details className="forecast-client" key={cliente.id}><summary>
           <span><strong>{cliente.nome}</strong><small>{cliente.codigo} · {responsaveis.map(v => v.nome).join(', ')}</small></span>
@@ -131,7 +127,7 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
           <span className="forecast-client-total">{somaExibida(grupo.linhas, idsMeses)} kg</span><span className="forecast-chevron" aria-hidden="true">⌄</span>
         </summary><div className="forecast-client-detail">
           <div className="forecast-client-actions"><span>Produtos e quantidades • {cliente.nome}</span></div>
-          <TabelaMensal linhas={grupo.linhas} meses={meses} vendedores={vendedores} />
+          <TabelaMensal linhas={grupo.linhas} meses={meses} vendedores={vendedores} produtos={produtosCadastro} />
           <div className="forecast-grid-footer">↔ Role a tabela para consultar os 12 meses.</div>
         </div></details>
       })}
@@ -152,6 +148,7 @@ export function Forecast({ usuario }: { usuario: UsuarioApp }) {
         {grupos.length > 0 && <tfoot><tr><th scope="row">Total previsto (kg)</th>{meses.map(m => <td key={m.id}>{somaExibida(visiveis, [m.id])}</td>)}<td>{somaExibida(visiveis, idsMeses)}</td></tr></tfoot>}
       </table></div>
     </div>}
-    {<div className="form-card forecast-chart"><h2>Distribuição mensal prevista</h2><p>Volumes demonstrativos, conforme os filtros acima.</p><div className="forecast-bars">{meses.map(m => { const valor = totalForecast(visiveis, [m.id]); return <div key={m.id}><span>{somaExibida(visiveis, [m.id])}</span><div className="forecast-bar-track"><div style={{ height: (valor / maximoMes * 100) + '%' }} /></div><small>{m.label}</small></div> })}</div></div>}
+    {<div className="form-card forecast-chart"><h2>Distribuição mensal prevista</h2><p>Quantidades previstas, conforme os filtros acima.</p><div className="forecast-bars">{meses.map(m => { const valor = totalForecast(visiveis, [m.id]); return <div key={m.id}><span>{somaExibida(visiveis, [m.id])}</span><div className="forecast-bar-track"><div style={{ height: (valor / maximoMes * 100) + '%' }} /></div><small>{m.label}</small></div> })}</div></div>}
   </section>
 }
+
