@@ -182,7 +182,6 @@ export function Login({ mensagemInicial = '', recuperar = false }: { mensagemIni
           </span>
         </div>
 
-        <p className="login-note">ColorNet Comercial • acesso seguro</p>
       </form>
     </AuthLayout>
   )
