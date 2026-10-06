@@ -2,30 +2,30 @@ import type { ReactNode } from 'react'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
 import { BrandLogo } from './BrandLogo'
 import { InstallPwaButton } from './Pwa'
-import { Icon } from './Icon'
+import './authGlass.css'
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="auth-shell">
-      <header className="auth-topbar">
-        <BrandLogo />
+    <div className="auth-shell auth-glass">
+      <div className="auth-glass-decoration" aria-hidden="true">
+        <span className="auth-glass-orbit" />
+        <span className="auth-glass-orb" />
+        <span className="auth-glass-ribbon" />
+      </div>
+      <header className="auth-glass-topbar">
+        <span>COLORNET COMERCIAL</span>
         <span className={IS_PRODUCTION ? 'env-chip prod' : 'env-chip'}>{APP_ENV_LABEL}</span>
       </header>
-      <main className="auth-content">
-        <section className="auth-intro" aria-label="Portal Comercial ColorNet">
-          <span className="auth-eyebrow">PORTAL COMERCIAL</span>
-          <h1>Mais conexão.<br />Novas possibilidades.</h1>
-          <p>Clientes, cotações e pedidos.<br />Tudo conectado ao seu dia a dia.</p>
-          <div className="auth-features">
-            <span><Icon name="clients" /> Sua carteira de clientes</span>
-            <span><Icon name="quote" /> Cotações e oportunidades</span>
-            <span><Icon name="orders" /> Acompanhamento de pedidos</span>
+      <main className="auth-glass-main">
+        <section className="auth-glass-panel" aria-label="Acesso ao portal ColorNet">
+          <div className="auth-glass-brand">
+            <BrandLogo />
+            <h1>Portal Comercial</h1>
           </div>
-          <div className="auth-signature">ColorNet <span>•</span> a vinmar company</div>
+          {children}
         </section>
-        <div className="auth-form-area">{children}<InstallPwaButton /></div>
       </main>
-      <footer className="auth-footer">ColorNet Comercial <span>Um espaço para conectar negócios.</span></footer>
+      <footer className="auth-glass-footer"><span>ColorNet • a vinmar company</span><InstallPwaButton /></footer>
     </div>
   )
 }
