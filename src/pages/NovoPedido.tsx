@@ -711,6 +711,8 @@ export function NovoPedido({
 
   function cancelarEdicao() {
     fiscalSeq.current += 1
+    disponibilidadeSeq.current += 1
+    setEstoque([]); setPrevisoes([]); setCarregandoDisponibilidade(false)
     setEditandoId('')
     setProduto(null); setProdutoBusca(''); setResultadosProduto([])
     setQuantidade(''); setPrecoNet(''); setPrecoFinalManual('')
@@ -735,6 +737,8 @@ export function NovoPedido({
       setPrecoNet(String(item.preco_net)); setPrecoFinalManual(String(item.preco_final))
       setFaixa(item.faixa_interna); setObservacaoPreco(item.observacao_preco || '')
       setCalculo(null)
+      setEstoque([]); setPrevisoes([])
+      if (!cotacao) void consultarDisponibilidade(item.produto_id)
       document.getElementById('editor-produto')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível editar o produto.')
