@@ -1,3 +1,4 @@
+import { identificarFilial } from '../lib/filiaisFaturamento'
 import { temVisaoComercial } from '../lib/permissoes'
 import { carregarClientesComerciais } from '../lib/clientesComerciais'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -14,6 +15,7 @@ import type {
   Produto,
   UsuarioApp,
 } from '../types'
+import { RevisaoComercial } from '../components/RevisaoComercial'
 import { Loading } from '../components/Loading'
 import { DraftNotice } from '../components/DraftNotice'
 import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
@@ -204,6 +206,11 @@ export function NovoPedido({
   const [carregandoBase, setCarregandoBase] = useState(true)
   const [calculando, setCalculando] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [revisando, setRevisando] = useState(false)
+  const [editandoId, setEditandoId] = useState('')
+  const [carregandoEdicao, setCarregandoEdicao] = useState(false)
+  const [processandoItem, setProcessandoItem] = useState(false)
+  const edicaoRef = useRef(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
@@ -231,6 +238,7 @@ export function NovoPedido({
     setPrazoId(saved.fields.prazoId || '')
     setFreteId(saved.fields.freteId || '')
     setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setEditandoId(saved.items.some(item => item.idLocal === saved.fields.editandoId) ? saved.fields.editandoId : '')
     setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
     setObservacoes(saved.fields.observacoes || '')
     setProdutoBusca(saved.fields.produtoBusca || '')
@@ -251,7 +259,7 @@ export function NovoPedido({
   }
   const draft = useCommercialDraft(
     draftKey(APP_ENV_LABEL, usuario.id, draftKind),
-    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, filialId, transportadora, dataEntrega, obsTransporte, precoFinalManual, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    { fields: { editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, filialId, transportadora, dataEntrega, obsTransporte, precoFinalManual, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
     Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || transportadora || obsTransporte || dataEntrega || precoFinalManual || (filialId && filialId !== filiais[0]?.id)),
     !carregandoBase && !duplicando && !pedidoDuplicarId, restaurarRascunho
   )
@@ -701,9 +709,42 @@ export function NovoPedido({
     return result
   }
 
+  function cancelarEdicao() {
+    fiscalSeq.current += 1
+    setEditandoId('')
+    setProduto(null); setProdutoBusca(''); setResultadosProduto([])
+    setQuantidade(''); setPrecoNet(''); setPrecoFinalManual('')
+    setEntradaPreco('NET'); setFaixa(null); setCalculo(null); setObservacaoPreco('')
+    setErro('')
+  }
+
+  async function editarItem(item: ItemPedidoLocal) {
+    if (edicaoRef.current || salvando || envioRef.current || adicionandoRef.current) return
+    if (produto || editandoId) { setErro('Conclua ou cancele o produto em edição antes de editar outro item.'); return }
+    edicaoRef.current = true
+    setCarregandoEdicao(true)
+    setErro('')
+    try {
+      const { data, error } = await supabase.from('produtos').select('*,precos(*)').eq('id', item.produto_id).eq('ativo', true).single()
+      if (error || !data) throw new Error('Não foi possível carregar o produto para edição. Tente novamente.')
+      fiscalSeq.current += 1
+      setEditandoId(item.idLocal)
+      setProduto(data as Produto); setProdutoBusca(item.produto); setResultadosProduto([])
+      setQuantidade(item.quantidade == null ? '' : String(item.quantidade))
+      setEntradaPreco(item.entrada_preco || 'NET')
+      setPrecoNet(String(item.preco_net)); setPrecoFinalManual(String(item.preco_final))
+      setFaixa(item.faixa_interna); setObservacaoPreco(item.observacao_preco || '')
+      setCalculo(null)
+      document.getElementById('editor-produto')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível editar o produto.')
+    } finally { edicaoRef.current = false; setCarregandoEdicao(false) }
+  }
+
   async function adicionarItem() {
     if (adicionandoRef.current) return
     adicionandoRef.current = true
+    setProcessandoItem(true)
     try {
     const result = await calcularFiscalAutomatico()
     if (!result || !produto) return
@@ -741,7 +782,7 @@ export function NovoPedido({
     const total = Number((subtotal + valorIpi).toFixed(2))
 
     const novo: ItemPedidoLocal = {
-      idLocal: idLocal(),
+      idLocal: editandoId || idLocal(),
       produto_id: produto.id,
       codigo: produto.codigo_protheus,
       produto: produto.nome,
@@ -767,7 +808,8 @@ export function NovoPedido({
       observacao_preco: obs,
     }
 
-    setItens((atual) => [...atual, novo])
+    setItens((atual) => editandoId ? atual.map(item => item.idLocal === editandoId ? novo : item) : [...atual, novo])
+    setEditandoId('')
     disponibilidadeSeq.current += 1
     setProduto(null)
     setProdutoBusca('')
@@ -783,7 +825,7 @@ export function NovoPedido({
     setPrevisoes([])
     setCarregandoDisponibilidade(false)
     setErro('')
-    } finally { adicionandoRef.current = false }
+    } finally { adicionandoRef.current = false; setProcessandoItem(false) }
   }
 
   function excluirItem(id: string) {
@@ -803,8 +845,10 @@ export function NovoPedido({
     )
   }, [itens])
 
-  async function salvarPedido() {
-    if (salvando || envioRef.current) return
+  async function salvarPedido(confirmar = false) {
+    if (salvando || envioRef.current || edicaoRef.current || adicionandoRef.current) return
+    if (confirmar && !revisando) return
+    if (produto || editandoId) { setErro('Adicione, salve ou cancele o produto em edição antes de revisar.'); return }
     if (cotacao && !titulo.trim()) { setErro('Informe o título da cotação/lista de preço.'); return }
     setErro('')
     setSucesso('')
@@ -840,8 +884,9 @@ export function NovoPedido({
           const valorIpi = Number((subtotal * ipi).toFixed(2))
           revisados.push({ ...item, preco_final: final, ipi, subtotal, valor_ipi: valorIpi, total_item: Number((subtotal + valorIpi).toFixed(2)), modo_fiscal: fiscal.automatico ? 'AUTOMATICO' : 'MANUAL', aliquota_icms: fiscal.aliquota ?? null, divisor_icms: fiscal.divisor ?? null })
         }
-        if (revisados.some((item, i) => item.preco_final !== itens[i].preco_final || item.ipi !== itens[i].ipi || item.modo_fiscal !== itens[i].modo_fiscal || item.divisor_icms !== itens[i].divisor_icms)) {
+        if (revisados.some((item, i) => item.preco_final !== itens[i].preco_final || item.ipi !== itens[i].ipi || item.modo_fiscal !== itens[i].modo_fiscal || item.divisor_icms !== itens[i].divisor_icms || item.aliquota_icms !== itens[i].aliquota_icms)) {
           setItens(revisados)
+          setRevisando(false)
           throw new Error('Os impostos ou preços mudaram. Os valores foram atualizados; revise o total e confirme novamente.')
         }
       } catch (error) {
@@ -849,6 +894,13 @@ export function NovoPedido({
         setErro(error instanceof Error ? error.message : 'Não foi possível conferir os preços. Tente novamente.')
         return
       }
+    }
+
+    if (!confirmar) {
+      setRevisando(true)
+      envioRef.current = false
+      setSalvando(false)
+      return
     }
 
     const cabecalho = {
@@ -895,6 +947,7 @@ export function NovoPedido({
       envioRef.current = false
       setSalvando(false)
       setSucesso(`${data.numero} salva. Acesse Cotações / Listas para baixar o PDF.`)
+      setRevisando(false)
       draft.clear()
       setItens([]); setTitulo(''); setObservacoes(''); setIdempotencyKey(crypto.randomUUID())
       onPedidoCriado()
@@ -938,7 +991,7 @@ export function NovoPedido({
       if (IS_PRODUCTION) {
         const { error: emailError } = await supabase.functions.invoke('pedido-confirmacao', {
           body: { pedido_id: resposta.pedido_id },
-        })
+        }).catch(() => ({ error: new Error('Falha ao enviar a confirmação.') }))
         if (emailError) {
           setAvisoEmail('Pedido salvo, porém o e-mail de confirmação não foi enviado. O ADMIN pode conferir o log de e-mails.')
         }
@@ -950,6 +1003,7 @@ export function NovoPedido({
     envioRef.current = false
     setSalvando(false)
 
+    setRevisando(false)
     draft.clear()
     setItens([])
     setTitulo(''); setProduto(null); setProdutoBusca(''); setQuantidade(''); setPrecoNet(''); setPrecoFinalManual(''); setCalculo(null); setFaixa(null); setObservacaoPreco('')
@@ -978,8 +1032,28 @@ export function NovoPedido({
 
   if (draft.pending) return <section className="page"><h1>Novo Pedido</h1><DraftNotice draft={draft} /></section>
 
+  if (revisando) return <RevisaoComercial
+      tipo={cotacao ? 'cotação' : 'pedido'}
+      campos={[
+        ['Entrega prevista', dataEntrega ? dataEntrega.split('-').reverse().join('/') : ''],
+        ['Transportadora', transportadora],
+        ['Observações de transporte', obsTransporte],
+        ['Cliente', clienteSelecionado ? `${clienteSelecionado.codigo}${clienteSelecionado.loja ? ` / ${clienteSelecionado.loja}` : ''} — ${clienteSelecionado.razao_social}` : ''],
+        ['Localidade', [clienteSelecionado?.municipio, clienteSelecionado?.uf].filter(Boolean).join(' / ')],
+        ['Filial de faturamento', filiais.find(f => f.id === filialId) ? identificarFilial(filiais.find(f => f.id === filialId)!).nome : ''],
+        ['Moeda', moeda === 'USD' ? 'US$ — Dólar' : 'R$ — Real'],
+        ['Prazo de pagamento', prazos.find(p => p.id === prazoId)?.descricao],
+        ['Frete', fretes.find(f => f.id === freteId)?.descricao],
+        ['Vendedor', vendedores.find(v => v.id === (vendedorIdAdmin || clienteSelecionado?.vendedor_id || usuario.vendedor_id))?.nome || (!admin ? usuario.nome : 'Conforme carteira do cliente')],
+      ]}
+      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} salvando={salvando}
+      onEditar={() => { setRevisando(false); setErro('') }}
+      onConfirmar={() => void salvarPedido(true)}
+    />
+
   return (
     <section className="page">
+      <fieldset disabled={salvando || carregandoEdicao || processandoItem} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <DraftNotice draft={draft} />
       <div className="page-header">
         <div>
@@ -1183,11 +1257,13 @@ export function NovoPedido({
         </div>
       </div>
 
-      <div className="form-card">
+      <div className="form-card" id="editor-produto">
+        {(produto || editandoId) && <button type="button" className="secondary-button" disabled={calculando || salvando} onClick={cancelarEdicao}>{editandoId ? 'Cancelar edição do item' : 'Limpar produto em preenchimento'}</button>}
+        {editandoId && <p>O item original será mantido até você salvar as alterações.</p>}
         <div className="section-title">
           <span>2</span>
           <div>
-            <strong>Adicionar produto</strong>
+            <strong>{editandoId ? 'Editar produto' : 'Adicionar produto'}</strong>
             <small>{cotacao ? 'Cotação não reserva estoque. Os preços ficam registrados na data da cotação.' : 'O estoque é reservado ao salvar o pedido.'}</small>
           </div>
         </div>
@@ -1554,7 +1630,7 @@ export function NovoPedido({
               onClick={adicionarItem}
               disabled={calculando || salvando}
             >
-              {cotacao ? 'Adicionar produto à cotação' : 'Adicionar produto ao pedido'}
+              {editandoId ? 'Salvar alterações do item' : cotacao ? 'Adicionar produto à cotação' : 'Adicionar produto ao pedido'}
             </button>
           </div>
         )}
@@ -1600,8 +1676,10 @@ export function NovoPedido({
                   </td>
                   <td>{item.quantidade == null ? '—' : money(item.total_item, moeda)}</td>
                   <td>
+                    <button type="button" className="secondary-button" disabled={Boolean(editandoId)} onClick={() => editarItem(item)}>Editar</button>
                     <button
                       type="button"
+                      disabled={Boolean(editandoId)}
                       className="danger-link"
                       onClick={() => excluirItem(item.idLocal)}
                     >
@@ -1652,12 +1730,13 @@ export function NovoPedido({
         <button
           type="button"
           className="primary-button submit-order"
-          onClick={salvarPedido}
+          onClick={() => void salvarPedido()}
           disabled={salvando || !itens.length}
         >
-          {salvando ? 'Salvando...' : cotacao ? 'Salvar Cotação / Lista' : 'Salvar Pedido'}
+          {salvando ? 'Conferindo...' : cotacao ? 'Revisar cotação' : 'Revisar pedido'}
         </button>
       </div>
+      </fieldset>
     </section>
   )
 }
