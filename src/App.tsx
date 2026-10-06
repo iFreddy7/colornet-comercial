@@ -21,6 +21,7 @@ import { Admin } from './pages/Admin'
 import { startsRecovery, cleanRecoveryUrl, clearRecovery } from './lib/recoveryContext'
 
 const Forecast = lazy(() => import('./pages/Forecast').then(module => ({ default: module.Forecast })))
+const LancarForecast = lazy(() => import('./pages/LancarForecast').then(module => ({ default: module.LancarForecast })))
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -97,6 +98,7 @@ function App() {
     {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
     {tela === 'forecast' && !IS_PRODUCTION && <Suspense fallback={<Loading texto="Abrindo forecast..." />}><Forecast key={usuario.id} usuario={usuario} /></Suspense>}
+    {tela === 'novo-forecast' && !IS_PRODUCTION && <Suspense fallback={<Loading texto="Abrindo formulário..." />}><LancarForecast key={usuario.id} usuario={usuario} onConsultar={() => navegar('forecast')} /></Suspense>}
     {tela === 'relatorios' && temVisaoComercial(usuario) && <Relatorios usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}
   </Layout>

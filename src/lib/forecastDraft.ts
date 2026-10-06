@@ -80,3 +80,25 @@ export function lerForecast(raw: string | null, vendedores: string[]): { linhas:
     return { linhas: valor.linhas, salvoEm: valor.salvoEm }
   } catch { return null }
 }
+
+export function atualizarForecastPeriodo(base: ForecastLinha[], itens: ForecastLinha[], clienteId: string, vendedorId: string, meses: string[]) {
+  const periodo = new Set(meses)
+  const outras = base.filter(l => l.clienteId !== clienteId || l.vendedorId !== vendedorId)
+  const atuais = base.filter(l => l.clienteId === clienteId && l.vendedorId === vendedorId)
+  const produtos = new Set([...atuais, ...itens].map(l => l.produtoId))
+  const atualizadas: ForecastLinha[] = []
+  for (const produtoId of produtos) {
+    const antiga = atuais.find(l => l.produtoId === produtoId)
+    const nova = itens.find(l => l.produtoId === produtoId)
+    const quantidades = Object.fromEntries(Object.entries(antiga?.quantidades || {}).filter(([mes]) => !periodo.has(mes)))
+    for (const mes of meses) if (nova?.quantidades[mes]?.trim()) quantidades[mes] = nova.quantidades[mes]
+    if (Object.keys(quantidades).length) atualizadas.push({ id: antiga?.id || nova!.id, clienteId, vendedorId, produtoId, quantidades })
+  }
+  return [...outras, ...atualizadas]
+}
+export function colunasRelatorioForecast(linhas: ForecastLinha[], meses: ReturnType<typeof mesesForecast>, vendedores: { id: string; nome: string }[]) {
+  return {
+    cabecalho: ['Vendedor', 'Cliente', 'Código cliente', 'Produto', 'Código produto', ...meses.map(m => m.label + ' (kg)'), 'Total (kg)'],
+    linhas: linhas.map(l => [vendedores.find(v => v.id === l.vendedorId)?.nome || '', clientesExemplo.find(c => c.id === l.clienteId)?.nome || '', clientesExemplo.find(c => c.id === l.clienteId)?.codigo || '', produtosExemplo.find(p => p.id === l.produtoId)?.nome || '', produtosExemplo.find(p => p.id === l.produtoId)?.codigo || '', ...meses.map(m => quantidadeForecast(l.quantidades[m.id])), totalInformadoForecast([l], meses.map(m => m.id))]),
+  }
+}

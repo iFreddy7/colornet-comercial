@@ -119,3 +119,23 @@
   .forecast-filter-card .forecast-filters label { min-width: 0; flex-basis: 100%; }
   .forecast-customer-form .forecast-filters label { flex-basis: 100%; }
 }
+
+.forecast-month-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 22px 0; }
+.forecast-month-fields label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; color: #19337f; }
+.forecast-month-fields small { font-size: 11px; font-weight: 400; color: #64728a; }
+.forecast-month-fields input, .forecast-product-field select { width: 100%; padding: 12px; border: 1px solid #dce3ee; border-radius: 8px; color: #202e49; background: white; min-height: 44px; }
+.forecast-product-field { display: grid; gap: 8px; font-size: 12px; color: #44526b; }
+.forecast-form-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 14px; margin-top: 24px; }
+.forecast-form-actions > strong { margin-right: auto; color: #19337f; }
+.forecast-save-note { color: #64728a; font-size: 12px; line-height: 1.7; margin-top: 20px; }
+.forecast-load { margin-top: 18px; }
+.forecast-success button { margin: 12px 12px 0 0; }
+.forecast-flat-report { border-collapse: collapse; width: max-content; min-width: 100%; }
+.forecast-flat-report th { position: sticky; top: 0; background: #edf2fa; white-space: nowrap; color: #334969; text-transform: none; }
+.forecast-flat-report th, .forecast-flat-report td { padding: 15px; border-bottom: 1px solid #e4eaf3; min-width: 110px; }
+.forecast-flat-report td:nth-child(n+6) { text-align: right; }
+@media (max-width: 700px) {
+  .forecast-month-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .forecast-month-fields input, .forecast-product-field select { font-size: 16px; }
+  .forecast-form-actions button { width: 100%; }
+}
