@@ -16,6 +16,7 @@ import type {
   Produto,
   UsuarioApp,
 } from '../types'
+import { RevisaoComercial } from '../components/RevisaoComercial'
 import { Loading } from '../components/Loading'
 import { DraftNotice } from '../components/DraftNotice'
 import { draftKey, type CommercialDraft } from '../lib/commercialDraft'
@@ -97,6 +98,11 @@ export function NovaCotacaoV2({
 
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  const [revisando, setRevisando] = useState(false)
+  const [editandoId, setEditandoId] = useState('')
+  const [carregandoEdicao, setCarregandoEdicao] = useState(false)
+  const [processandoItem, setProcessandoItem] = useState(false)
+  const edicaoRef = useRef(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const [avisoEmail, setAvisoEmail] = useState('')
@@ -123,6 +129,7 @@ export function NovaCotacaoV2({
     setFreteId(saved.fields.freteId || '')
     setFilialId(saved.fields.filialId || '')
     setVendedorIdAdmin(saved.fields.vendedorIdAdmin || '')
+    setEditandoId(saved.items.some(item => item.idLocal === saved.fields.editandoId) ? saved.fields.editandoId : '')
     setMoeda(saved.fields.moeda === 'BRL' ? 'BRL' : 'USD')
     setObservacoes(saved.fields.observacoes || '')
     setProdutoBusca(saved.fields.produtoBusca || '')
@@ -140,7 +147,7 @@ export function NovaCotacaoV2({
   }
   const draft = useCommercialDraft(
     draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
-    { fields: { titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    { fields: { editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
     Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || filialId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
     !carregando, restaurarRascunho
   )
@@ -292,6 +299,7 @@ export function NovaCotacaoV2({
   }
 
   function selecionarProdutoVazio() {
+    fiscalSeq.current += 1
     setProduto(null)
     setProdutoBusca('')
     setResultadosProduto([])
@@ -364,9 +372,42 @@ export function NovaCotacaoV2({
     return result
   }
 
+  function cancelarEdicao() {
+    fiscalSeq.current += 1
+    setEditandoId('')
+    setProduto(null); setProdutoBusca(''); setResultadosProduto([])
+    setQuantidade(''); setPrecoNet(''); setPrecoFinal('')
+    setEntradaPreco('NET'); setFaixa(null); setCalculo(null); setObservacaoPreco('')
+    setErro('')
+  }
+
+  async function editarItem(item: ItemPedidoLocal) {
+    if (edicaoRef.current || salvando || envioRef.current || adicionandoRef.current) return
+    if (produto || editandoId) { setErro('Conclua ou cancele o produto em edição antes de editar outro item.'); return }
+    edicaoRef.current = true
+    setCarregandoEdicao(true)
+    setErro('')
+    try {
+      const { data, error } = await supabase.from('produtos').select('*,precos(*)').eq('id', item.produto_id).eq('ativo', true).single()
+      if (error || !data) throw new Error('Não foi possível carregar o produto para edição. Tente novamente.')
+      fiscalSeq.current += 1
+      setEditandoId(item.idLocal)
+      setProduto(data as Produto); setProdutoBusca(item.produto); setResultadosProduto([])
+      setQuantidade(item.quantidade == null ? '' : String(item.quantidade))
+      setEntradaPreco(item.entrada_preco || 'NET')
+      setPrecoNet(String(item.preco_net)); setPrecoFinal(String(item.preco_final))
+      setFaixa(item.faixa_interna); setObservacaoPreco(item.observacao_preco || '')
+      setCalculo(null)
+      document.getElementById('editor-produto')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível editar o produto.')
+    } finally { edicaoRef.current = false; setCarregandoEdicao(false) }
+  }
+
   async function adicionarItem() {
     if (adicionandoRef.current) return
     adicionandoRef.current = true
+    setProcessandoItem(true)
 
     try {
       const result = await calcularFiscalAutomatico()
@@ -405,7 +446,7 @@ export function NovaCotacaoV2({
       const valorIpi = qtd == null ? 0 : Number((subtotal * ipi).toFixed(2))
 
       const novo: ItemPedidoLocal = {
-        idLocal: idLocal(),
+        idLocal: editandoId || idLocal(),
         produto_id: produto.id,
         codigo: produto.codigo_protheus,
         produto: produto.nome,
@@ -429,11 +470,13 @@ export function NovaCotacaoV2({
         observacao_preco: obs,
       }
 
-      setItens((atual) => [...atual, novo])
+      setItens((atual) => editandoId ? atual.map(item => item.idLocal === editandoId ? novo : item) : [...atual, novo])
+      setEditandoId('')
       selecionarProdutoVazio()
       setErro('')
     } finally {
       adicionandoRef.current = false
+      setProcessandoItem(false)
     }
   }
 
@@ -450,8 +493,10 @@ export function NovaCotacaoV2({
     [itens]
   )
 
-  async function salvarCotacao() {
-    if (salvando || envioRef.current) return
+  async function salvarCotacao(confirmar = false) {
+    if (salvando || envioRef.current || edicaoRef.current || adicionandoRef.current) return
+    if (confirmar && !revisando) return
+    if (produto || editandoId) { setErro('Adicione, salve ou cancele o produto em edição antes de revisar.'); return }
 
     setErro('')
     setSucesso('')
@@ -471,6 +516,13 @@ export function NovaCotacaoV2({
 
     envioRef.current = true
     setSalvando(true)
+
+    if (!confirmar) {
+      setRevisando(true)
+      envioRef.current = false
+      setSalvando(false)
+      return
+    }
 
     const cabecalho = {
       titulo: titulo.trim(),
@@ -561,6 +613,7 @@ export function NovaCotacaoV2({
         : `${numero} salva com sucesso.`
     )
 
+    setRevisando(false)
     draft.clear()
     setTitulo('')
     setValidade(dataIsoMaisDias(7))
@@ -590,8 +643,27 @@ export function NovaCotacaoV2({
 
   if (draft.pending) return <section className="page"><h1>Nova Cotação</h1><DraftNotice draft={draft} /></section>
 
+  if (revisando) return <RevisaoComercial
+      tipo="cotação"
+      campos={[
+        ['Título', titulo],
+        ['Validade', validade.split('-').reverse().join('/')],
+        ['Cliente', clienteSelecionado ? `${clienteSelecionado.codigo}${clienteSelecionado.loja ? ` / ${clienteSelecionado.loja}` : ''} — ${clienteSelecionado.razao_social}` : ''],
+        ['Localidade', [clienteSelecionado?.municipio, clienteSelecionado?.uf].filter(Boolean).join(' / ')],
+        ['Filial de faturamento', filiais.find(f => f.id === filialId) ? identificarFilial(filiais.find(f => f.id === filialId)!).nome : ''],
+        ['Moeda', moeda === 'USD' ? 'US$ — Dólar' : 'R$ — Real'],
+        ['Prazo de pagamento', prazos.find(p => p.id === prazoId)?.descricao],
+        ['Frete', fretes.find(f => f.id === freteId)?.descricao],
+        ['Vendedor', vendedores.find(v => v.id === (vendedorIdAdmin || clienteSelecionado?.vendedor_id || usuario.vendedor_id))?.nome || (!admin ? usuario.nome : 'Conforme carteira do cliente')],
+      ]}
+      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} salvando={salvando}
+      onEditar={() => { setRevisando(false); setErro('') }}
+      onConfirmar={() => void salvarCotacao(true)}
+    />
+
   return (
     <section className="page">
+      <fieldset disabled={salvando || carregandoEdicao || processandoItem} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <DraftNotice draft={draft} />
       <div className="page-header">
         <div>
@@ -755,11 +827,13 @@ export function NovaCotacaoV2({
         </div>
       </div>
 
-      <div className="form-card">
+      <div className="form-card" id="editor-produto">
+        {(produto || editandoId) && <button type="button" className="secondary-button" disabled={calculando || salvando} onClick={cancelarEdicao}>{editandoId ? 'Cancelar edição do item' : 'Limpar produto em preenchimento'}</button>}
+        {editandoId && <p>O item original será mantido até você salvar as alterações.</p>}
         <div className="section-title">
           <span>2</span>
           <div>
-            <strong>Adicionar produto</strong>
+            <strong>{editandoId ? 'Editar produto' : 'Adicionar produto'}</strong>
             <small>A quantidade é opcional. O Colour Index fica visível junto ao produto.</small>
           </div>
         </div>
@@ -916,7 +990,7 @@ export function NovaCotacaoV2({
               onClick={adicionarItem}
               disabled={calculando || salvando}
             >
-              Adicionar produto à cotação
+              {editandoId ? 'Salvar alterações do item' : 'Adicionar produto à cotação'}
             </button>
           </div>
         )}
@@ -950,8 +1024,10 @@ export function NovaCotacaoV2({
                   <td>{item.aliquota_icms == null ? 'MANUAL' : `${(item.aliquota_icms * 100).toFixed(0)}%`}</td>
                   <td>{item.quantidade == null ? '—' : money(item.total_item, moeda)}</td>
                   <td>
+                    <button type="button" className="secondary-button" disabled={Boolean(editandoId)} onClick={() => editarItem(item)}>Editar</button>
                     <button
                       type="button"
+                      disabled={Boolean(editandoId)}
                       className="danger-link"
                       onClick={() => {
                         if (window.confirm('Excluir este produto?')) {
@@ -985,12 +1061,13 @@ export function NovaCotacaoV2({
         <button
           type="button"
           className="primary-button submit-order"
-          onClick={salvarCotacao}
+          onClick={() => void salvarCotacao()}
           disabled={salvando || !itens.length}
         >
-          {salvando ? 'Salvando e enviando...' : 'Salvar Cotação'}
+          {salvando ? 'Conferindo...' : 'Revisar cotação'}
         </button>
       </div>
+      </fieldset>
     </section>
   )
 }
