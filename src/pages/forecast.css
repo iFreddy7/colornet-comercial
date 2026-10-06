@@ -1,0 +1,68 @@
+.forecast-page .page-header { align-items: center; }
+.forecast-demo { padding: 16px 20px; border: 1px solid #e8d69a; border-radius: 12px; color: #73541d; background: #fffaf0; margin-bottom: 24px; }
+.forecast-demo strong { font-size: 13px; }
+.forecast-demo p { margin: 6px 0 0; line-height: 1.65; font-size: 12px; }
+.forecast-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; }
+.forecast-filters label { display: grid; gap: 8px; min-width: 165px; font-size: 12px; font-weight: 600; color: #44526b; }
+.forecast-filters .forecast-search { flex: 1; }
+.forecast-filters input, .forecast-filters select { min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid #dce3ee; border-radius: 8px; background: white; color: #202e49; }
+.forecast-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 28px; }
+.forecast-metrics > div { padding: 22px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; }
+.forecast-metrics span { color: #64728a; font-size: 12px; }
+.forecast-metrics strong { display: block; margin: 12px 0 8px; font-size: 30px; font-weight: 650; color: #19337f; letter-spacing: -.04em; }
+.forecast-metrics strong small { font-size: 15px; font-weight: 500; }
+.forecast-metrics p { margin: 0; color: #64728a; font-size: 11px; line-height: 1.5; }
+.forecast-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.forecast-toolbar > button { display: flex; align-items: center; gap: 8px; }
+.forecast-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 10px; background: #eaf0f8; }
+.forecast-tabs button { min-height: 42px; padding: 10px 15px; border: 0; border-radius: 7px; background: transparent; color: #52647d; font-size: 12px; font-weight: 600; }
+.forecast-tabs button[aria-pressed="true"] { background: white; color: #19337f; box-shadow: 0 2px 5px #19337f12; }
+.forecast-add h2, .forecast-grid-heading h2, .forecast-chart h2 { margin: 0 0 8px; font-size: 17px; color: #202e49; }
+.forecast-add .forecast-filters { margin-top: 20px; }
+.forecast-add .forecast-filters label { flex: 1; min-width: 200px; }
+.forecast-grid-card { border: 1px solid #dce3ee; background: white; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+.forecast-grid-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 22px; }
+.forecast-grid-heading p, .forecast-chart > p { margin: 0; font-size: 12px; color: #64728a; line-height: 1.6; }
+.forecast-grid-heading > span { font-size: 11px; color: #19337f; white-space: nowrap; background: #edf2fa; padding: 8px 10px; border-radius: 7px; }
+.forecast-table-wrap { overflow: auto; max-height: 590px; }
+.forecast-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
+.forecast-table th, .forecast-table td { padding: 12px 9px; border-bottom: 1px solid #e6ecf4; min-width: 100px; white-space: nowrap; }
+.forecast-table thead th { position: sticky; top: 0; z-index: 3; background: #edf2fa; color: #425778; text-align: right; font-size: 11px; font-weight: 600; text-transform: none; }
+.forecast-table thead th small { display: block; color: #64728a; font-size: 10px; font-weight: 400; margin-top: 4px; }
+.forecast-table th:first-child { position: sticky; left: 0; z-index: 2; min-width: 250px; max-width: 290px; padding: 16px 20px; text-align: left; white-space: normal; border-right: 1px solid #e6ecf4; }
+.forecast-table thead th:first-child { z-index: 4; }
+.forecast-table tbody th { background: white; font-weight: 400; text-transform: none; letter-spacing: normal; }
+.forecast-table tbody th strong, .forecast-table tbody th span, .forecast-table tbody th code, .forecast-table tbody th small { display: block; }
+.forecast-table tbody th strong { margin-bottom: 5px; font-size: 12px; color: #202e49; }
+.forecast-table tbody th span { font-size: 11px; color: #52647d; line-height: 1.5; }
+.forecast-table tbody th code { margin-top: 5px; color: #19337f; font-size: 11px; }
+.forecast-table tbody th small { margin-top: 6px; color: #64728a; font-size: 10px; }
+.forecast-table td { text-align: right; color: #334969; }
+.forecast-table input { width: 85px; min-height: 42px; padding: 10px 8px; border: 1px solid #dce3ee; border-radius: 7px; background: #fafcff; color: #19337f; text-align: right; font-size: 13px; }
+.forecast-table input:focus { outline: 2px solid #5882c2; outline-offset: 1px; background: white; }
+.forecast-table input[aria-invalid="true"] { border-color: #c94050; background: #fff4f5; }
+.forecast-invalid { color: #a21d32; margin: 0; padding: 0 22px 18px; font-size: 12px; }
+.forecast-row-total { font-weight: 650; background: #f8fafd; }
+.forecast-table tfoot th, .forecast-table tfoot td { background: #edf2fa; color: #19337f; font-weight: 700; }
+.forecast-grid-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 14px 22px; color: #64728a; font-size: 11px; }
+.forecast-bars { display: grid; grid-template-columns: repeat(12, minmax(50px, 1fr)); gap: 10px; overflow-x: auto; padding: 22px 0 8px; }
+.forecast-bars > div { display: flex; flex-direction: column; align-items: center; gap: 9px; color: #64728a; font-size: 10px; }
+.forecast-bars > div > span { color: #334969; font-weight: 600; }
+.forecast-bar-track { display: flex; align-items: flex-end; width: 26px; height: 120px; background: #f2f5fa; border-radius: 5px; overflow: hidden; }
+.forecast-bar-track > div { width: 100%; background: linear-gradient(180deg, #4f77b4, #19337f); border-radius: 5px 5px 0 0; }
+@media (max-width: 1100px) {
+  .forecast-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .forecast-filters label { width: 100%; min-width: 0; }
+  .forecast-filters input, .forecast-filters select, .forecast-table input { font-size: 16px; }
+  .forecast-metrics { gap: 10px; }
+  .forecast-metrics > div { padding: 16px; }
+  .forecast-metrics strong { font-size: 25px; }
+  .forecast-toolbar { align-items: stretch; }
+  .forecast-tabs { width: 100%; }
+  .forecast-tabs button { flex: 1; padding: 8px; }
+  .forecast-grid-heading { padding: 18px; align-items: flex-start; flex-direction: column; }
+  .forecast-table th:first-child { min-width: 170px; max-width: 170px; padding: 12px; }
+  .forecast-grid-footer { padding: 14px; }
+}

@@ -6,7 +6,7 @@ import { BrandLogo } from './BrandLogo'
 import { InstallPwaButton } from './Pwa'
 import { Icon, type IconName } from './Icon'
 
-export type Tela = 'inicio' | 'novo-pedido' | 'pedidos' | 'produtos' | 'clientes' | 'admin' | 'relatorios' | 'nova-cotacao' | 'cotacoes'
+export type Tela = 'inicio' | 'novo-pedido' | 'pedidos' | 'produtos' | 'clientes' | 'admin' | 'relatorios' | 'nova-cotacao' | 'cotacoes' | 'forecast'
 
 interface LayoutProps {
   usuario: UsuarioApp
@@ -84,6 +84,7 @@ export function Layout({ usuario, tela, setTela, onSair, children }: LayoutProps
           {item('pedidos', visaoComercial ? 'Todos os Pedidos' : 'Meus Pedidos', 'orders')}
           {item('nova-cotacao', 'Nova Cotação / Lista', 'plus')}
           {item('cotacoes', visaoComercial ? 'Todas as Cotações' : 'Minhas Cotações', 'quote')}
+          {!IS_PRODUCTION && item('forecast', 'Forecast · rascunho', 'trend')}
           <p className="nav-group-title">CONSULTAS</p>
           {item('produtos', 'Produtos', 'products')}
           {item('clientes', visaoComercial ? 'Todos os Clientes' : 'Minha Carteira', 'clients')}
