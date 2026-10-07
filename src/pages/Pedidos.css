@@ -1,7 +1,7 @@
 /* Estilos desta tela acompanham Pedidos.tsx, inclusive em projetos com CSS antigo. */
 .orders-page .order-summary-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   padding: 0;
 }
 
@@ -11,8 +11,11 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 14px 12px 0;
+  padding: 0 14px 14px;
 }
+
+.orders-page .order-open-button > div { min-width: 0; overflow-wrap: anywhere; }
+.orders-page .order-open-button > .badge { display: inline-flex; justify-self: start; }
 
 .orders-page .order-action-buttons > button {
   min-height: 44px;
@@ -143,3 +146,4 @@
 }
 .invoiced-email-note { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; background: #f5f7fb; color: #33486c; font-size: 13px; }
 .invoiced-email-note button { min-height: 44px; }
+
