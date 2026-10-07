@@ -32,12 +32,18 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
   const [aviso, setAviso] = useState('')
   const [revisando, setRevisando] = useState(false)
   const [ocupado, setOcupado] = useState(false)
-  const [buscaCliente, setBuscaCliente] = useState('')
+  const [buscaCliente, setBuscaCliente] = useState(() => {
+    const selecionado = clientesCadastro.find(c => c.id === form.clienteId)
+    return selecionado ? `${selecionado.codigo} — ${selecionado.nome}` : ''
+  })
   const [buscaProduto, setBuscaProduto] = useState('')
   const [salvo, setSalvo] = useState(false)
   const meses = mesesForecast(form.inicio)
   const idsMeses = meses.map(m => m.id)
   const cliente = clientesCadastro.find(c => c.id === form.clienteId)
+  const normalizarBusca = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ')
+  const termoCliente = normalizarBusca(buscaCliente)
+  const clientesEncontrados = clientesCadastro.filter(c => c.ativo && [c.nome, c.codigo, c.nomeFantasia || ''].some(valor => normalizarBusca(valor).includes(termoCliente)))
   const vendedor = vendedores.find(v => v.id === form.vendedorId)
   const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 
@@ -102,9 +108,22 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
       <div className="forecast-form-actions">{erro && <button type="button" className="secondary-button" disabled={ocupado} onClick={() => void carregarExistente()}>Recarregar previsão salva</button>}<button type="button" className="secondary-button" disabled={ocupado} onClick={() => setRevisando(false)}>Voltar e editar</button><button type="button" className="primary-button" disabled={ocupado} onClick={() => void salvar()}>{ocupado ? 'Salvando...' : 'Salvar forecast'}</button></div>
     </div> : <form onSubmit={e => { e.preventDefault(); revisar() }}>
       <fieldset className="forecast-fieldset" disabled={ocupado}><div className="form-card"><div className="section-title"><span>1</span><div><strong>Dados do forecast</strong><small>Cliente, responsável e período do planejamento.</small></div></div>
-        <label className="forecast-product-field">Buscar cliente<input type="search" value={buscaCliente} onChange={e => setBuscaCliente(e.target.value)} placeholder="Nome ou código do cliente" /></label>
+        <div className="field autocomplete-wrap forecast-product-field">
+          <label htmlFor="forecast-cliente">Cliente *</label>
+          <input id="forecast-cliente" type="search" autoComplete="off" required
+            value={form.clienteId ? `${cliente?.codigo || ''} — ${cliente?.nome || ''}` : buscaCliente}
+            disabled={form.itens.length > 0 || Boolean(form.editandoId)}
+            onChange={e => { setBuscaCliente(e.target.value); alterar({ clienteId: '', produtoId: '', quantidades: {} }) }}
+            placeholder={gestao ? 'Pesquise qualquer cliente...' : 'Pesquise sua carteira...'} />
+          {termoCliente && !form.clienteId && <div className="autocomplete" role="region" aria-label="Clientes encontrados">
+            {clientesEncontrados.slice(0, 50).map(c => <button type="button" key={c.id} onClick={() => { alterar({ clienteId: c.id }); setBuscaCliente('') }}>
+              <strong>{c.codigo} — {c.nome}</strong>{c.nomeFantasia && <span>{c.nomeFantasia}</span>}
+            </button>)}
+            {!clientesEncontrados.length && <div className="autocomplete-empty" role="status">Nenhum cliente disponível para seu acesso.</div>}
+            {clientesEncontrados.length > 50 && <div className="autocomplete-empty">Mostrando 50 de {clientesEncontrados.length} clientes. Digite mais para refinar a busca.</div>}
+          </div>}
+        </div>
         <div className="forecast-filters">
-          <label>Cliente *<select required disabled={form.itens.length > 0 || Boolean(form.editandoId)} value={form.clienteId} onChange={e => alterar({ clienteId: e.target.value })}><option value="">Selecione o cliente</option>{clientesCadastro.filter(c => c.ativo && (!buscaCliente || (c.nome + ' ' + c.codigo).toLocaleLowerCase('pt-BR').includes(buscaCliente.toLocaleLowerCase('pt-BR')) || c.id === form.clienteId)).map(c => <option key={c.id} value={c.id}>{c.nome} · {c.codigo}</option>)}</select></label>
           {gestao && <label>Vendedor responsável *<select disabled={form.itens.length > 0 || Boolean(form.editandoId)} value={form.vendedorId} onChange={e => alterar({ vendedorId: e.target.value })}>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}</select></label>}
           <label>Início dos 12 meses *<input type="month" required min="2020-01" max="2099-01" disabled={form.itens.length > 0 || Boolean(form.produtoId)} value={form.inicio} onChange={e => { if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) alterar({ inicio: e.target.value }) }} /></label>
         </div>

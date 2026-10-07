@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import { IS_PRODUCTION } from './env'
 import { quantidadeForecast, type ForecastCadastro, type ForecastLinha } from './forecastDraft'
 
-export interface ForecastRegistro extends ForecastCadastro { ativo: boolean; vendedorId?: string | null }
+export interface ForecastRegistro extends ForecastCadastro { ativo: boolean; vendedorId?: string | null; nomeFantasia?: string | null }
 export interface ForecastPlano { cliente_id: string; vendedor_id: string; documento: Record<string, Record<string, number>>; revisao: number; atualizado_em: string }
 export interface ForecastDados { clientes: ForecastRegistro[]; produtos: ForecastRegistro[]; vendedores: ForecastRegistro[]; planos: ForecastPlano[] }
 function verificarAmbiente() { if (IS_PRODUCTION) throw new Error('O forecast está disponível somente na homologação.') }
@@ -19,13 +19,13 @@ async function paginar<T>(tabela: string, colunas: string): Promise<T[]> {
 export async function carregarForecastDados(): Promise<ForecastDados> {
   verificarAmbiente()
   const [clientes, produtos, vendedores, planos] = await Promise.all([
-    paginar<{id:string;codigo:string;loja:string|null;razao_social:string;ativo:boolean;vendedor_id:string|null}>('clientes','id,codigo,loja,razao_social,ativo,vendedor_id'),
+    paginar<{id:string;codigo:string;loja:string|null;razao_social:string;nome_fantasia:string|null;ativo:boolean;vendedor_id:string|null}>('clientes','id,codigo,loja,razao_social,nome_fantasia,ativo,vendedor_id'),
     paginar<{id:string;codigo_protheus:string|null;nome:string;ativo:boolean}>('produtos','id,codigo_protheus,nome,ativo'),
     paginar<{id:string;codigo_protheus:string|null;nome:string;ativo:boolean}>('vendedores','id,codigo_protheus,nome,ativo'),
     paginar<ForecastPlano>('forecast_planos','cliente_id,vendedor_id,documento,revisao,atualizado_em'),
   ])
   return {
-    clientes: clientes.map(c=>({id:c.id,codigo:c.codigo+(c.loja?' / '+c.loja:''),nome:c.razao_social,ativo:c.ativo,vendedorId:c.vendedor_id})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),
+    clientes: clientes.map(c=>({id:c.id,codigo:c.codigo+(c.loja?' / '+c.loja:''),nome:c.razao_social,nomeFantasia:c.nome_fantasia,ativo:c.ativo,vendedorId:c.vendedor_id})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),
     produtos: produtos.map(p=>({id:p.id,codigo:p.codigo_protheus||'',nome:p.nome,ativo:p.ativo})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')||a.codigo.localeCompare(b.codigo)),
     vendedores: vendedores.map(v=>({id:v.id,codigo:v.codigo_protheus||'',nome:v.nome,ativo:v.ativo})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),
     planos,
