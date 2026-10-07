@@ -44,6 +44,9 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
   const normalizarBusca = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ')
   const termoCliente = normalizarBusca(buscaCliente)
   const clientesEncontrados = clientesCadastro.filter(c => c.ativo && [c.nome, c.codigo, c.nomeFantasia || ''].some(valor => normalizarBusca(valor).includes(termoCliente)))
+  const produto = produtosCadastro.find(p => p.id === form.produtoId)
+  const termoProduto = normalizarBusca(buscaProduto)
+  const produtosEncontrados = produtosCadastro.filter(p => p.ativo && [p.nome, p.codigo].some(valor => normalizarBusca(valor).includes(termoProduto)))
   const vendedor = vendedores.find(v => v.id === form.vendedorId)
   const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
 
@@ -132,8 +135,20 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
         {form.itens.length > 0 && <p className="forecast-save-note">Cliente, vendedor e período ficam fixos enquanto houver itens neste formulário.</p>}
       </div>
       <div className="form-card"><div className="section-title"><span>2</span><div><strong>{form.editandoId ? 'Editar produto' : 'Adicionar produto'}</strong><small>Selecione o produto e informe as quantidades previstas para cada mês.</small></div></div>
-        <label className="forecast-product-field">Buscar produto<input type="search" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)} placeholder="Nome ou código do produto" /></label>
-        <label className="forecast-product-field">Produto *<select disabled={!form.clienteId} value={form.produtoId} onChange={e => alterar({ produtoId: e.target.value })}><option value="">{form.clienteId ? 'Selecione o produto e código' : 'Selecione primeiro o cliente'}</option>{produtosCadastro.filter(p => p.ativo && (!buscaProduto || (p.nome + ' ' + p.codigo).toLocaleLowerCase('pt-BR').includes(buscaProduto.toLocaleLowerCase('pt-BR')) || p.id === form.produtoId)).map(p => <option key={p.id} value={p.id}>{p.nome} · {p.codigo}</option>)}</select></label>
+        <div className="field autocomplete-wrap forecast-product-field">
+          <label htmlFor="forecast-produto">Produto *</label>
+          <input id="forecast-produto" type="search" autoComplete="off" disabled={!form.clienteId}
+            value={form.produtoId ? `${produto?.codigo || ''} — ${produto?.nome || ''}` : buscaProduto}
+            onChange={e => { setBuscaProduto(e.target.value); alterar({ produtoId: '' }) }}
+            placeholder={form.clienteId ? 'Pesquise por nome ou código do produto...' : 'Selecione primeiro o cliente'} />
+          {form.clienteId && termoProduto && !form.produtoId && <div className="autocomplete" role="region" aria-label="Produtos encontrados">
+            {produtosEncontrados.slice(0, 50).map(p => <button type="button" key={p.id} onClick={() => { alterar({ produtoId: p.id }); setBuscaProduto('') }}>
+              <strong>{p.nome}</strong><span>{p.codigo || 'Sem código cadastrado'}</span>
+            </button>)}
+            {!produtosEncontrados.length && <div className="autocomplete-empty" role="status">Nenhum produto encontrado. Tente outro nome ou código.</div>}
+            {produtosEncontrados.length > 50 && <div className="autocomplete-empty">Mostrando 50 de {produtosEncontrados.length} produtos. Digite mais para refinar a busca.</div>}
+          </div>}
+        </div>
         {form.produtoId && <><div className="forecast-month-fields">{meses.map(m => <label key={m.id}>{m.label}<small>Quantidade (kg)</small><input type="text" inputMode="decimal" maxLength={20} aria-label={'Quantidade ' + m.label} value={form.quantidades[m.id] || ''} placeholder="Não informado" onChange={e => alterar({ quantidades: { ...form.quantidades, [m.id]: e.target.value } })} /></label>)}</div><p className="forecast-save-note">Preencha os meses com venda prevista. Use 0 para indicar que não haverá venda; deixe vazio se ainda não souber.</p>
           <div className="forecast-form-actions"><button type="button" className="primary-button" onClick={adicionarProduto}>{form.editandoId ? 'Salvar alterações do produto' : 'Adicionar produto ao forecast'}</button><button type="button" className="secondary-button" onClick={() => alterar({ produtoId: '', quantidades: {}, editandoId: '' })}>Cancelar {form.editandoId ? 'edição' : 'inclusão'}</button></div></>}
       </div>
@@ -145,4 +160,3 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
     </form>}
   </section>
 }
-
