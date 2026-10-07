@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { atualizarForecastPeriodo, colunasRelatorioForecast, exemploForecast, mesesForecast } from '../src/lib/forecastDraft.ts'
+import { repetirQuantidadesForecast, atualizarForecastPeriodo, colunasRelatorioForecast, exemploForecast, mesesForecast } from '../src/lib/forecastDraft.ts'
 
 test('Relatório utiliza os cadastros recebidos do banco e mantém variantes separadas',()=>{
   const produtos=[{id:'uuid-p1',nome:'Produto igual',codigo:'AD010.2BD25'},{id:'uuid-p2',nome:'Produto igual',codigo:'AD010.7BD25'}]
@@ -34,4 +34,23 @@ test('Relatório mantém vendedor, cliente, produto e cada mês em colunas com n
   assert.equal(relatorio.linhas[0][16],null)
   assert.notEqual(relatorio.linhas[0][4],relatorio.linhas[2][4])
   assert.equal(relatorio.linhas.every(l=>l.length===18),true)
+})
+
+
+test('Repetir quantidades preserva origem, meses anteriores e valores fora do período, sem alterar o rascunho original', () => {
+  const meses = ['2026-10', '2026-11', '2026-12', '2027-01']
+  const original = { '2026-09': '90', '2026-10': '15', '2026-11': '125,5', '2026-12': '20' }
+  const antes = structuredClone(original)
+  const resultado = repetirQuantidadesForecast(original, meses, '2026-11')
+  assert.deepEqual(resultado, { ...original, '2026-12': '125,5', '2027-01': '125,5' })
+  assert.deepEqual(original, antes)
+})
+test('Repetir permite zero explícito e rejeita vazio, negativo, precisão inválida ou mês sem sucessor', () => {
+  const meses = ['2026-10', '2026-11']
+  assert.deepEqual(repetirQuantidadesForecast({ '2026-10': '0', '2026-11': '9' }, meses, meses[0]), { '2026-10': '0', '2026-11': '0' })
+  for (const valor of ['', ' ', '-1', '1,2345', '1000000000', 'abc']) {
+    assert.throws(() => repetirQuantidadesForecast({ '2026-10': valor }, meses, meses[0]))
+  }
+  assert.throws(() => repetirQuantidadesForecast({ '2026-11': '1' }, meses, meses[1]))
+  assert.throws(() => repetirQuantidadesForecast({ '2027-01': '1' }, meses, '2027-01'))
 })

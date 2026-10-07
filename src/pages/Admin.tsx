@@ -19,6 +19,7 @@ function rel<T>(value: T | T[] | null): T | null {
 const dataHora = dataHoraBrasilia
 
 export function Admin({ usuario }: { usuario: UsuarioApp }) {
+  const [aba, setAba] = useState('usuarios')
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([])
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
   const [filiais, setFiliais] = useState<Filial[]>([])
@@ -43,7 +44,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
       supabase.from('usuarios').select(`id,nome,email,perfil,vendedor_id,ativo,vendedores(nome,codigo_protheus)`).order('nome'),
       supabase.from('vendedores').select('id,codigo_protheus,nome,email,ativo').order('nome'),
       supabase.from('integracao_execucoes').select('*').order('criado_em', { ascending: false }).limit(30),
-      supabase.rpc('admin_clientes_sem_vendedor'),
+      supabase.from('clientes').select('id', { count: 'exact', head: true }).is('vendedor_id', null),
       supabase.from('filiais').select('id,codigo,nome,uf').order('nome'),
     ])
 
@@ -54,7 +55,7 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
     setVendedores((v.data ?? []) as Vendedor[])
     setFiliais((f.data ?? []) as Filial[])
     setIntegracoes((i.data ?? []) as IntegracaoExecucao[])
-    setClientesSemVendedor(Number(c.data ?? 0))
+    setClientesSemVendedor(c.count ?? 0)
     setCarregando(false)
   }
 
@@ -129,10 +130,10 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
   }), [usuarios])
 
   if (usuario.perfil !== 'ADMIN' || !usuario.ativo) return <div className="alert error">Acesso restrito a ADMIN ativo.</div>
-  if (carregando) return <section className="page"><Loading texto="Carregando administração..." /></section>
+  if (carregando) return <section className="page admin-page"><Loading texto="Carregando administração..." /></section>
 
   return (
-    <section className="page">
+    <section className="page admin-page">
       <div className="page-header">
         <div>
           <span className="eyebrow">ADMINISTRAÇÃO • {APP_ENV_LABEL}</span>
@@ -181,12 +182,20 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         <div className="stat-card"><span>Clientes sem vendedor</span><strong>{clientesSemVendedor}</strong></div>
       </div>
 
-      <AdminNovoVendedor onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
+      <nav className="portal-tabs" aria-label="Seções da administração">
+        {[['usuarios', 'Usuários'], ['vendedores', 'Vendedores'], ['relatorios', 'Relatórios'], ['integracoes', 'Integrações']].map(([id, titulo]) =>
+          <button type="button" key={id} aria-pressed={aba === id} aria-controls={'admin-' + id} onClick={() => setAba(id)}>{titulo}</button>)}
+      </nav>
+      <div id="admin-vendedores" hidden={aba !== 'vendedores'}>
+        <AdminNovoVendedor onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
+        <div className="form-card"><h2>Vendedores cadastrados</h2><div className="vendor-directory">{vendedores.map(v =>
+          <div key={v.id}><strong>{v.nome}</strong><small>{v.codigo_protheus || 'Sem código'} · {v.ativo ? 'Ativo' : 'Inativo'}</small></div>)}</div></div>
+      </div>
+      <div id="admin-relatorios" hidden={aba !== 'relatorios'}><AdminExportacao vendedores={vendedores} filiais={filiais} /></div>
+      <div id="admin-usuarios" hidden={aba !== 'usuarios'}>
       <AdminNovoUsuario vendedores={vendedores} onCriado={async (texto) => { setMensagem(texto); await carregar() }} />
-      <AdminExportacao vendedores={vendedores} filiais={filiais} />
-
       <div className="form-card">
-        <div className="section-title"><span>1</span><div><strong>Usuários</strong><small>Perfil, vendedor e ativação sem SQL manual.</small></div></div>
+        <div className="section-title"><span>1</span><div><strong>Usuários</strong><small>Gerencie o perfil e a carteira de cada usuário.</small></div></div>
         <div className="table-scroll">
           <table className="admin-users-table">
             <thead><tr><th>Usuário</th><th>Perfil</th><th>Vendedor vinculado</th><th>Ativo</th><th>Ações</th></tr></thead>
@@ -195,21 +204,21 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
                 const vend = rel(item.vendedores)
                 return (
                   <tr key={item.id}>
-                    <td><strong>{item.nome || 'Sem nome'}</strong><small>{item.email || '—'}</small></td>
-                    <td>
-                      <select value={item.perfil} onChange={(e) => alterarLocal(item.id, { perfil: e.target.value as AdminUsuario['perfil'] })}>
+                    <td data-label="Usuário"><strong>{item.nome || 'Sem nome'}</strong><small>{item.email || '—'}</small></td>
+                    <td data-label="Perfil">
+                      <select aria-label={"Perfil de " + (item.nome || item.email)} value={item.perfil} onChange={(e) => alterarLocal(item.id, { perfil: e.target.value as AdminUsuario['perfil'] })}>
                         <option value="VENDEDOR">VENDEDOR</option><option value="GERENTE">GERENTE</option><option value="DIRETOR">DIRETOR</option><option value="ADMIN">ADMIN</option>
                       </select>
                     </td>
-                    <td>
-                      <select value={item.vendedor_id || ''} onChange={(e) => alterarLocal(item.id, { vendedor_id: e.target.value || null })}>
+                    <td data-label="Vendedor vinculado">
+                      <select aria-label={"Vendedor de " + (item.nome || item.email)} value={item.vendedor_id || ''} onChange={(e) => alterarLocal(item.id, { vendedor_id: e.target.value || null })}>
                         <option value="">Sem vínculo</option>
                         {vendedores.filter(v => v.ativo || v.id === item.vendedor_id).map((v) => <option key={v.id} value={v.id}>{v.nome}{v.codigo_protheus ? ` • ${v.codigo_protheus}` : ''}{v.ativo ? '' : ' (inativo)'}</option>)}
                       </select>
                       {vend && <small>Atual: {vend.nome}</small>}
                     </td>
-                    <td><label className="switch-line"><input type="checkbox" checked={item.ativo} onChange={(e) => alterarLocal(item.id, { ativo: e.target.checked })}/><span>{item.ativo ? 'Sim' : 'Não'}</span></label></td>
-                    <td><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id || gerandoLinkId !== null} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" disabled={gerandoLinkId !== null || !item.ativo || !item.email} onClick={() => gerarLinkSenha(item)}>{gerandoLinkId === item.id ? 'Gerando...' : 'Gerar link de senha'}</button></div></td>
+                    <td data-label="Ativo"><label className="switch-line"><input aria-label={"Acesso ativo de " + (item.nome || item.email)} type="checkbox" checked={item.ativo} onChange={(e) => alterarLocal(item.id, { ativo: e.target.checked })}/><span>{item.ativo ? 'Sim' : 'Não'}</span></label></td>
+                    <td data-label="Ações"><div className="admin-actions"><button className="primary-button compact-button" disabled={salvandoId === item.id || gerandoLinkId !== null} onClick={() => salvarUsuario(item)}>{salvandoId === item.id ? 'Salvando...' : 'Salvar'}</button><button className="secondary-button compact-button" disabled={gerandoLinkId !== null || !item.ativo || !item.email} onClick={() => gerarLinkSenha(item)}>{gerandoLinkId === item.id ? 'Gerando...' : 'Gerar link de senha'}</button></div></td>
                   </tr>
                 )
               })}
@@ -218,7 +227,8 @@ export function Admin({ usuario }: { usuario: UsuarioApp }) {
         </div>
       </div>
 
-      <div className="form-card">
+      </div>
+      <div id="admin-integracoes" hidden={aba !== 'integracoes'} className="form-card">
         <div className="section-title"><span>2</span><div><strong>Integrações por e-mail</strong><small>Últimas leituras de estoque, preços e previsão.</small></div></div>
         <div className="integration-legend"><span className="badge neutral">DRY RUN = não altera dados</span><span className="badge success">APLICADO = atualizou os dados</span></div>
         <div className="table-scroll">

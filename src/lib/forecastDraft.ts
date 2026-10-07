@@ -102,3 +102,14 @@ export function colunasRelatorioForecast(linhas: ForecastLinha[], meses: ReturnT
     linhas: linhas.map(l => [vendedores.find(v => v.id === l.vendedorId)?.nome || '', clientes.find(c => c.id === l.clienteId)?.nome || '', clientes.find(c => c.id === l.clienteId)?.codigo || '', produtos.find(p => p.id === l.produtoId)?.nome || '', produtos.find(p => p.id === l.produtoId)?.codigo || '', ...meses.map(m => quantidadeForecast(l.quantidades[m.id])), totalInformadoForecast([l], meses.map(m => m.id))]),
   }
 }
+
+
+export function repetirQuantidadesForecast(quantidades: Record<string, string>, meses: string[], origem: string) {
+  const indice = meses.indexOf(origem)
+  if (indice < 0 || indice === meses.length - 1 || quantidadeForecast(quantidades[origem]) === null) {
+    throw new Error('Preencha uma quantidade válida no mês de origem e escolha um mês que tenha meses seguintes.')
+  }
+  const proximas = { ...quantidades }
+  for (const mes of meses.slice(indice + 1)) proximas[mes] = quantidades[origem].trim()
+  return proximas
+}

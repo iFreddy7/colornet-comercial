@@ -1,3 +1,4 @@
+import { FiltrosRecolhiveis } from '../components/FiltrosRecolhiveis'
 import { useMemo, useState } from 'react'
 import type { UsuarioApp } from '../types'
 import { temVisaoComercial } from '../lib/permissoes'
@@ -90,7 +91,7 @@ export function Forecast({ usuario, dados }: { usuario: UsuarioApp; dados: Forec
   return <section className="page forecast-page">
     <div className="page-header"><div><span className="eyebrow">PLANEJAMENTO COMERCIAL</span><h1>Consultar forecast</h1><p>Analise as previsões e gere o relatório por vendedor, cliente, produto e mês.</p></div>
       <button type="button" className="secondary-button" onClick={exportar} disabled={exportando || invalidas || !visiveis.length}>{exportando ? 'Gerando Excel...' : 'Gerar relatório Excel'}</button></div>
-    <div className="forecast-demo"><strong>Forecast em teste · homologação</strong><p>Previsões salvas no Supabase da homologação, disponíveis conforme as permissões do seu perfil. Para incluir ou editar, use Lançar forecast.</p></div>
+    <p className="forecast-help">Previsões salvas no portal. Para incluir ou editar, use Lançar forecast.</p>
     {aviso && <div className="alert" role="status">{aviso}</div>}
     <div className="forecast-toolbar"><div className="forecast-tabs" aria-label="Visualização do forecast">
       <button type="button" aria-pressed={aba === 'clientes'} onClick={() => { setAba('clientes'); setAviso('') }}>Por cliente</button>
@@ -99,12 +100,12 @@ export function Forecast({ usuario, dados }: { usuario: UsuarioApp; dados: Forec
     </div><label className="forecast-period">Início dos 12 meses<input type="month" min="2020-01" max="2100-01" value={inicio} onChange={e => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)) setInicio(e.target.value) }} /></label></div>
 
     <>
-      <div className="form-card forecast-filter-card"><div className="forecast-filters">
+      <FiltrosRecolhiveis ativos={[vendedorFiltro, clienteFiltro, produtoFiltro].filter(Boolean).length}><div className="forecast-filters">
         {gestao && <label>Filtrar por vendedor<select value={vendedorFiltro} onChange={e => setVendedorFiltro(e.target.value)}><option value="">Todos os vendedores</option>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}</select></label>}
         <label>Filtrar por cliente<select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}><option value="">Todos os clientes</option>{clientesCadastro.map(c => <option key={c.id} value={c.id}>{c.nome} · {c.codigo}</option>)}</select></label>
         <label>Filtrar por produto<select value={produtoFiltro} onChange={e => setProdutoFiltro(e.target.value)}><option value="">Todos os produtos</option>{produtosCadastro.map(p => <option key={p.id} value={p.id}>{p.nome} · {p.codigo}</option>)}</select></label>
         <button type="button" className="secondary-button" onClick={() => { setClienteFiltro(''); setProdutoFiltro(''); setVendedorFiltro('') }}>Limpar filtros</button>
-      </div></div>
+      </div></FiltrosRecolhiveis>
       <div className="forecast-metrics">
         <div><span>Previsto no período</span><strong>{kg(total)} <small>kg</small></strong><p>Conforme os filtros selecionados</p></div>
         <div><span>Clientes</span><strong>{clientes.length}</strong><p>Com linhas de planejamento</p></div>

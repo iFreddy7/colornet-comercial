@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { UsuarioApp } from '../types'
 import { APP_ENV_LABEL } from '../lib/env'
 import { temVisaoComercial } from '../lib/permissoes'
-import { lerForecast, mesesForecast, mesAtualForecast, quantidadeForecast, totalForecast, type ForecastLinha } from '../lib/forecastDraft'
+import { repetirQuantidadesForecast, lerForecast, mesesForecast, mesAtualForecast, quantidadeForecast, totalForecast, type ForecastLinha } from '../lib/forecastDraft'
 import { carregarPlano, salvarForecast, linhasDosPlanos, type ForecastDados } from '../lib/forecastSupabase'
 import './forecast.css'
 
@@ -38,6 +38,11 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
   })
   const [buscaProduto, setBuscaProduto] = useState('')
   const [salvo, setSalvo] = useState(false)
+  const [pendente, setPendente] = useState(Boolean(form.clienteId || form.itens.length || form.produtoId))
+  const [rascunhoGuardado, setRascunhoGuardado] = useState(Boolean(form.clienteId || form.itens.length || form.produtoId))
+  const [carregado, setCarregado] = useState(false)
+  const [mesOrigem, setMesOrigem] = useState(form.inicio)
+  const [antesRepetir, setAntesRepetir] = useState<Record<string, string> | null>(null)
   const meses = mesesForecast(form.inicio)
   const idsMeses = meses.map(m => m.id)
   const cliente = clientesCadastro.find(c => c.id === form.clienteId)
@@ -54,8 +59,11 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
     const contextoMudou = (patch.clienteId != null && patch.clienteId !== form.clienteId) || (patch.vendedorId != null && patch.vendedorId !== form.vendedorId) || (patch.inicio != null && patch.inicio !== form.inicio)
     const proximo = { ...form, ...patch, revisao: contextoMudou ? null : patch.revisao === undefined ? form.revisao : patch.revisao }
     setForm(proximo); setErro(''); setAviso(''); setSalvo(false)
-    try { localStorage.setItem(draftKey, JSON.stringify(proximo)) }
-    catch { setErro('Não foi possível guardar o rascunho neste navegador. Mantenha esta tela aberta até salvar o forecast.') }
+    setPendente(Boolean(proximo.clienteId || proximo.itens.length || proximo.produtoId))
+    if (patch.quantidades || patch.produtoId !== undefined || contextoMudou) setAntesRepetir(null)
+    if (patch.inicio) setMesOrigem(patch.inicio)
+    try { localStorage.setItem(draftKey, JSON.stringify(proximo)); setRascunhoGuardado(true) }
+    catch { setRascunhoGuardado(false); setErro('Não foi possível guardar o rascunho neste navegador. Mantenha esta tela aberta até salvar o forecast.') }
   }
   async function carregarExistente() {
     if (ocupado) return
@@ -65,8 +73,8 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
       const base = plano ? linhasDosPlanos([plano]) : []
       const itens = base.filter(l => idsMeses.some(m => l.quantidades[m]?.trim())).map(l => ({ ...l, quantidades: Object.fromEntries(idsMeses.map(m => [m, l.quantidades[m] || ''])) }))
       alterar({ itens, produtoId: '', quantidades: {}, editandoId: '', revisao: plano?.revisao || 0 })
-      setRevisando(false)
-      setAviso(itens.length ? 'Previsão carregada do Supabase. Revise antes de salvar alterações.' : 'Ainda não há quantidades salvas para este período. Inclua os produtos.')
+      setRevisando(false); setPendente(false); setCarregado(Boolean(plano))
+      setAviso(itens.length ? 'Previsão carregada do portal. Revise antes de salvar alterações.' : 'Ainda não há quantidades salvas para este período. Inclua os produtos.')
     } catch (e) { setErro((e as {message?:string})?.message || 'Não foi possível carregar a previsão.') }
     finally { setOcupado(false) }
   }
@@ -93,25 +101,35 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
     setOcupado(true); setErro('')
     try {
       await salvarForecast(form.clienteId, form.vendedorId, form.inicio, form.itens, form.revisao ?? 0)
-      setSalvo(true); setRevisando(false); setErro(''); setAviso('Forecast salvo no Supabase da homologação. Já está disponível para consulta e relatório.')
+      setPendente(false); setRascunhoGuardado(false); setSalvo(true); setRevisando(false); setErro(''); setAviso('Forecast salvo no portal. Já está disponível para consulta e relatório.')
       try { localStorage.removeItem(draftKey) } catch { /* O forecast já foi salvo no servidor. */ }
-    } catch (e) { setErro((e as {message?:string})?.message || 'Não foi possível salvar no Supabase. Seu formulário foi preservado.') }
+    } catch (e) { setErro((e as {message?:string})?.message || 'Não foi possível salvar no portal. Seu formulário foi preservado.') }
     finally { setOcupado(false) }
   }
+  function repetir() {
+    try {
+      const anteriores = { ...form.quantidades }
+      const quantidades = repetirQuantidadesForecast(form.quantidades, idsMeses, mesOrigem)
+      alterar({ quantidades })
+      setAntesRepetir(anteriores)
+      setAviso('Quantidade repetida nos meses seguintes. Confira os valores antes de adicionar o produto.')
+    } catch (e) { setErro((e as Error).message) }
+  }
+  const estado = ocupado ? 'Processando…' : salvo ? 'Salvo no portal' : pendente ? 'Alterações não enviadas' : carregado ? 'Previsão carregada do portal' : 'Novo forecast'
   return <section className="page forecast-page">
-    <div className="page-header"><div><span className="eyebrow">PLANEJAMENTO COMERCIAL</span><h1>Lançar forecast</h1><p>Preencha os dados, adicione os produtos e revise antes de salvar.</p></div></div>
-    <div className="forecast-demo"><strong>Forecast em teste · homologação</strong><p>Cadastros reais da homologação. Ao salvar, a previsão fica no Supabase e pode ser consultada pelos usuários autorizados. O rascunho ainda não enviado fica neste navegador.</p></div>
+    <div className="page-header"><div><span className="eyebrow">PLANEJAMENTO COMERCIAL</span><h1>Lançar forecast</h1><p>Preencha os dados, adicione os produtos e revise antes de salvar.</p></div><div className={"forecast-save-state " + (salvo ? "is-saved" : "")} role="status"><strong>{estado}</strong>{pendente && <small>{rascunhoGuardado ? "Rascunho guardado neste dispositivo" : "Rascunho não guardado — mantenha a tela aberta"}</small>}</div></div>
+
     {erro && <div className="alert error" role="alert">{erro}</div>}
     {aviso && <div className="alert" role="status">{aviso}</div>}
-    {salvo ? <div className="form-card forecast-success"><h2>Forecast salvo</h2><p>{cliente?.nome} · {vendedor?.nome} · {meses[0].label} a {meses[11].label}</p><button type="button" className="primary-button" onClick={onConsultar}>Consultar forecast e gerar relatório</button><button type="button" className="secondary-button" onClick={() => alterar(vazio())}>Lançar outro forecast</button></div> : revisando ? <div className="form-card">
+    {salvo ? <div className="form-card forecast-success"><h2>Forecast salvo</h2><p>{cliente?.nome} · {vendedor?.nome} · {meses[0].label} a {meses[11].label}</p><button type="button" className="primary-button" onClick={onConsultar}>Consultar forecast e gerar relatório</button><button type="button" className="secondary-button" onClick={() => { alterar(vazio()); setCarregado(false); setBuscaCliente(''); setBuscaProduto('') }}>Lançar outro forecast</button></div> : revisando ? <div className="form-card">
       <div className="section-title"><span>✓</span><div><strong>Revisão do forecast</strong><small>Confira as informações antes de salvar.</small></div></div>
       <p><strong>Cliente:</strong> {cliente?.nome} · {cliente?.codigo}</p><p><strong>Vendedor:</strong> {vendedor?.nome}</p><p><strong>Período:</strong> {meses[0].label} a {meses[11].label} · Quantidades em kg</p>
       <div className="forecast-table-wrap"><table className="forecast-table"><thead><tr><th>Produto</th>{meses.map(m => <th key={m.id}>{m.label}</th>)}<th>Total kg</th></tr></thead><tbody>{form.itens.map(l => <tr key={l.id}><th><strong>{produtosCadastro.find(p => p.id === l.produtoId)?.nome}</strong><code>{produtosCadastro.find(p => p.id === l.produtoId)?.codigo}</code></th>{meses.map(m => <td key={m.id}>{quantidadeForecast(l.quantidades[m.id]) == null ? '—' : kg(quantidadeForecast(l.quantidades[m.id])!)}</td>)}<td>{kg(totalForecast([l], idsMeses))}</td></tr>)}</tbody></table></div>
       <p className="forecast-save-note">Ao salvar, esta lista substituirá a previsão deste cliente e vendedor nos 12 meses selecionados. Outros clientes, vendedores e períodos serão preservados.</p>
-      <div className="forecast-form-actions">{erro && <button type="button" className="secondary-button" disabled={ocupado} onClick={() => void carregarExistente()}>Recarregar previsão salva</button>}<button type="button" className="secondary-button" disabled={ocupado} onClick={() => setRevisando(false)}>Voltar e editar</button><button type="button" className="primary-button" disabled={ocupado} onClick={() => void salvar()}>{ocupado ? 'Salvando...' : 'Salvar forecast'}</button></div>
+      <div className="forecast-form-actions forecast-review-actions">{erro && <button type="button" className="secondary-button" disabled={ocupado} onClick={() => void carregarExistente()}>Recarregar previsão salva</button>}<button type="button" className="secondary-button" disabled={ocupado} onClick={() => setRevisando(false)}>Voltar e editar</button><button type="button" className="primary-button" disabled={ocupado} onClick={() => void salvar()}>{ocupado ? 'Salvando...' : 'Salvar forecast'}</button></div>
     </div> : <form onSubmit={e => { e.preventDefault(); revisar() }}>
-      <fieldset className="forecast-fieldset" disabled={ocupado}><div className="form-card"><div className="section-title"><span>1</span><div><strong>Dados do forecast</strong><small>Cliente, responsável e período do planejamento.</small></div></div>
-        <div className="field autocomplete-wrap forecast-product-field">
+      <fieldset className="forecast-fieldset" disabled={ocupado}><div className="form-card forecast-context-card"><div className="section-title"><span>1</span><div><strong>Dados do forecast</strong><small>Cliente, responsável e período do planejamento.</small></div></div>
+        <div className="forecast-context-grid"><div className="field autocomplete-wrap forecast-product-field">
           <label htmlFor="forecast-cliente">Cliente *</label>
           <input id="forecast-cliente" type="search" autoComplete="off" required
             value={form.clienteId ? `${cliente?.codigo || ''} — ${cliente?.nome || ''}` : buscaCliente}
@@ -130,7 +148,7 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
           {gestao && <label>Vendedor responsável *<select disabled={form.itens.length > 0 || Boolean(form.editandoId)} value={form.vendedorId} onChange={e => alterar({ vendedorId: e.target.value })}>{vendedores.map(v => <option key={v.id} value={v.id}>{v.nome}</option>)}</select></label>}
           <label>Início dos 12 meses *<input type="month" required min="2020-01" max="2099-01" disabled={form.itens.length > 0 || Boolean(form.produtoId)} value={form.inicio} onChange={e => { if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value)) alterar({ inicio: e.target.value }) }} /></label>
         </div>
-        <div className="forecast-form-meta"><span>Responsável: <strong>{vendedor?.nome}</strong></span><span>Quantidades em <strong>kg</strong></span><span>{meses[0].label} a {meses[11].label}</span></div>
+        </div><div className="forecast-form-meta"><span>Responsável: <strong>{vendedor?.nome}</strong></span><span>Quantidades em <strong>kg</strong></span><span>{meses[0].label} a {meses[11].label}</span></div>
         {form.clienteId && !form.itens.length && !form.produtoId && <button type="button" className="secondary-button forecast-load" onClick={() => void carregarExistente()}>Carregar previsão existente para editar</button>}
         {form.itens.length > 0 && <p className="forecast-save-note">Cliente, vendedor e período ficam fixos enquanto houver itens neste formulário.</p>}
       </div>
@@ -149,14 +167,26 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
             {produtosEncontrados.length > 50 && <div className="autocomplete-empty">Mostrando 50 de {produtosEncontrados.length} produtos. Digite mais para refinar a busca.</div>}
           </div>}
         </div>
-        {form.produtoId && <><div className="forecast-month-fields">{meses.map(m => <label key={m.id}>{m.label}<small>Quantidade (kg)</small><input type="text" inputMode="decimal" maxLength={20} aria-label={'Quantidade ' + m.label} value={form.quantidades[m.id] || ''} placeholder="Não informado" onChange={e => alterar({ quantidades: { ...form.quantidades, [m.id]: e.target.value } })} /></label>)}</div><p className="forecast-save-note">Preencha os meses com venda prevista. Use 0 para indicar que não haverá venda; deixe vazio se ainda não souber.</p>
+        {form.produtoId && <><div className="forecast-repeat">
+          <label htmlFor="forecast-mes-origem">Copiar quantidade de<select id="forecast-mes-origem" value={mesOrigem} onChange={e => setMesOrigem(e.target.value)}>{meses.slice(0, -1).map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
+          <button type="button" className="secondary-button" onClick={repetir}>Repetir nos próximos meses</button>
+          {antesRepetir && <button type="button" className="secondary-button" onClick={() => alterar({ quantidades: antesRepetir })}>Desfazer repetição</button>}
+          <small>Substitui as quantidades dos meses seguintes, inclusive as já preenchidas.</small>
+        </div><div className="forecast-month-fields">{meses.map(m => <label key={m.id}>{m.label}<small>Quantidade (kg)</small><input type="text" inputMode="decimal" maxLength={20} aria-label={'Quantidade ' + m.label} value={form.quantidades[m.id] || ''} placeholder="Não informado" onChange={e => alterar({ quantidades: { ...form.quantidades, [m.id]: e.target.value } })} /></label>)}</div><p className="forecast-save-note">Use Tab para avançar entre os meses. Use 0 para indicar que não haverá venda; deixe vazio se ainda não souber.</p>
           <div className="forecast-form-actions"><button type="button" className="primary-button" onClick={adicionarProduto}>{form.editandoId ? 'Salvar alterações do produto' : 'Adicionar produto ao forecast'}</button><button type="button" className="secondary-button" onClick={() => alterar({ produtoId: '', quantidades: {}, editandoId: '' })}>Cancelar {form.editandoId ? 'edição' : 'inclusão'}</button></div></>}
       </div>
       <div className="form-card"><div className="section-title"><span>3</span><div><strong>Itens do forecast</strong><small>{form.itens.length} produto(s) adicionado(s).</small></div></div>
-        <div className="table-scroll"><table><thead><tr><th>Produto</th><th>Código</th><th>Meses informados</th><th>Total kg</th><th>Ações</th></tr></thead><tbody>{form.itens.map(l => <tr key={l.id}><td>{produtosCadastro.find(p => p.id === l.produtoId)?.nome}</td><td>{produtosCadastro.find(p => p.id === l.produtoId)?.codigo}</td><td>{idsMeses.filter(m => quantidadeForecast(l.quantidades[m]) !== null).length} de 12</td><td>{kg(totalForecast([l], idsMeses))}</td><td><button type="button" className="secondary-button" disabled={Boolean(form.produtoId)} onClick={() => alterar({ produtoId: l.produtoId, quantidades: { ...l.quantidades }, editandoId: l.id })}>Editar</button><button type="button" className="danger-link" disabled={Boolean(form.produtoId)} onClick={() => alterar({ itens: form.itens.filter(i => i.id !== l.id) })}>Excluir</button></td></tr>)}{!form.itens.length && <tr><td colSpan={5} className="empty-cell">Nenhum produto adicionado.</td></tr>}</tbody></table></div>
-        <div className="forecast-form-actions"><strong>Total previsto: {kg(totalForecast(form.itens, idsMeses))} kg</strong><button type="submit" className="primary-button" disabled={!form.itens.length}>Revisar forecast</button></div>
+        <div className="table-scroll"><table className="forecast-items-table"><thead><tr><th>Produto</th><th>Código</th><th>Meses informados</th><th>Total kg</th><th>Ações</th></tr></thead><tbody>{form.itens.map(l => <tr key={l.id}><td data-label="Produto">{produtosCadastro.find(p => p.id === l.produtoId)?.nome}</td><td data-label="Código">{produtosCadastro.find(p => p.id === l.produtoId)?.codigo}</td><td data-label="Meses informados">{idsMeses.filter(m => quantidadeForecast(l.quantidades[m]) !== null).length} de 12</td><td data-label="Total kg">{kg(totalForecast([l], idsMeses))}</td><td data-label="Ações"><button type="button" className="secondary-button" disabled={Boolean(form.produtoId)} onClick={() => alterar({ produtoId: l.produtoId, quantidades: { ...l.quantidades }, editandoId: l.id })}>Editar</button><button type="button" className="danger-link" disabled={Boolean(form.produtoId)} onClick={() => alterar({ itens: form.itens.filter(i => i.id !== l.id) })}>Excluir</button></td></tr>)}{!form.itens.length && <tr><td colSpan={5} className="empty-cell">Nenhum produto adicionado.</td></tr>}</tbody></table></div>
+
       </div>
       </fieldset>
+      <div className="forecast-sticky-summary" aria-label="Resumo do forecast">
+        <div><small>Cliente</small><strong>{cliente?.nome || 'Selecione um cliente'}</strong>{form.produtoId && <small>Há um produto em preenchimento</small>}</div>
+        <div><small>Produtos adicionados</small><strong>{form.itens.length}</strong></div>
+        <div><small>Total adicionado</small><strong>{kg(totalForecast(form.itens, idsMeses))} kg</strong></div>
+        <button type="submit" className="primary-button" disabled={!form.itens.length || ocupado}>Revisar forecast</button>
+      </div>
     </form>}
   </section>
 }
+
