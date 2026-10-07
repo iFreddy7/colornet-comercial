@@ -25,6 +25,7 @@
 .forecast-page .forecast-month-fields { gap: 12px; margin: 16px 0; }
 .forecast-month-fields label { background: #f6f9fd; padding: 12px; border: 1px solid #e1e8f2; border-radius: 10px; }
 .forecast-month-fields input { text-align: right; font-variant-numeric: tabular-nums; }
+.forecast-page input, .forecast-page select, .forecast-page button { scroll-margin-block: 120px 210px; }
 .forecast-repeat { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .forecast-repeat label { display: grid; gap: 6px; font-size: 12px; color: #445778; }
 .forecast-repeat select { min-height: 44px; padding: 10px 12px; border: 1px solid #dce3ee; border-radius: 8px; color: #202e49; background: white; }

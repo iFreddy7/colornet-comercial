@@ -60,6 +60,7 @@ export function LancarForecast({ usuario, onConsultar, dados }: { usuario: Usuar
     const proximo = { ...form, ...patch, revisao: contextoMudou ? null : patch.revisao === undefined ? form.revisao : patch.revisao }
     setForm(proximo); setErro(''); setAviso(''); setSalvo(false)
     setPendente(Boolean(proximo.clienteId || proximo.itens.length || proximo.produtoId))
+    if (contextoMudou) setCarregado(false)
     if (patch.quantidades || patch.produtoId !== undefined || contextoMudou) setAntesRepetir(null)
     if (patch.inicio) setMesOrigem(patch.inicio)
     try { localStorage.setItem(draftKey, JSON.stringify(proximo)); setRascunhoGuardado(true) }
