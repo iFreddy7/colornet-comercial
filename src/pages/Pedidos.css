@@ -128,3 +128,18 @@
     min-height: 44px;
   }
 }
+
+.orders-page .mark-invoiced { max-width: 340px; }
+.orders-page .mark-invoiced button { min-height: 44px; }
+.orders-page .mark-invoiced-confirm { padding: 14px; background: #f2f7fc; border: 1px solid #cbd9ed; border-radius: 10px; }
+.orders-page .mark-invoiced-confirm strong { color: #19337f; }
+.orders-page .mark-invoiced-confirm p { font-size: 12px; line-height: 1.6; color: #52647d; margin: 8px 0 12px; }
+.orders-page .mark-invoiced-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.orders-page .invoiced-order-note { margin: 0 16px 14px; padding: 12px 14px; border: 1px solid #cce8d9; border-radius: 10px; background: #f0faf5; color: #256246; font-size: 12px; line-height: 1.6; }
+@media (max-width: 720px) {
+  .orders-page .mark-invoiced { flex: 1 1 130px; max-width: none; }
+  .orders-page .mark-invoiced > button { width: 100%; }
+  .orders-page .mark-invoiced-confirm > div { flex-direction: column; }
+}
+.invoiced-email-note { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; background: #f5f7fb; color: #33486c; font-size: 13px; }
+.invoiced-email-note button { min-height: 44px; }
