@@ -4,6 +4,7 @@ import { Loading } from '../components/Loading'
 import { Forecast } from './Forecast'
 import { LancarForecast } from './LancarForecast'
 import { carregarForecastDados, type ForecastDados } from '../lib/forecastSupabase'
+import { HistoricoFaturamento } from './HistoricoFaturamento'
 
 function ForecastConectado({usuario,modo,onConsultar}:{usuario:UsuarioApp;modo:'consulta'|'lancamento';onConsultar?:()=>void}) {
   const [dados,setDados]=useState<ForecastDados|null>(null)
@@ -20,6 +21,9 @@ function ForecastConectado({usuario,modo,onConsultar}:{usuario:UsuarioApp;modo:'
   if(modo==='lancamento'&&!dados.vendedores.some(v=>v.ativo&&(gestao||v.id===usuario.vendedor_id)))return <section className="page"><div className="alert error" role="alert">Seu usuário precisa estar vinculado a um vendedor ativo para lançar previsões. Solicite a conferência do cadastro ao administrador.</div></section>
   return modo==='consulta'?<Forecast usuario={usuario} dados={dados}/>:<LancarForecast usuario={usuario} dados={dados} onConsultar={onConsultar!}/>
 }
-export function ConsultarForecastSupabase({usuario}:{usuario:UsuarioApp}) {return <ForecastConectado usuario={usuario} modo="consulta"/>}
+export function ConsultarForecastSupabase({usuario}:{usuario:UsuarioApp}) {
+  const [historico,setHistorico]=useState(false)
+  return <><div className="forecast-tabs" style={{margin:'24px 28px 0'}} aria-label="Previsões ou compras realizadas"><button type="button" aria-pressed={!historico} onClick={()=>setHistorico(false)}>Previsões de forecast</button><button type="button" aria-pressed={historico} onClick={()=>setHistorico(true)}>Histórico faturado</button></div>{historico?<HistoricoFaturamento usuario={usuario}/>:<ForecastConectado usuario={usuario} modo="consulta"/>}</>
+}
 export function LancarForecastSupabase({usuario,onConsultar}:{usuario:UsuarioApp;onConsultar:()=>void}) {return <ForecastConectado usuario={usuario} modo="lancamento" onConsultar={onConsultar}/>}
 
