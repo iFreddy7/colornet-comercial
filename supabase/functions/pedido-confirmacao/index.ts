@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0'
+import { consultarPtaxFaturamento, textoPtaxFaturamento } from '../_shared/ptaxFaturamento.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
       return Response.json({ erro: 'Usuário sem acesso ativo.' }, { status: 403, headers: cors })
     }
     const { data: pedido, error: pe } = await admin.from('pedidos').select(`
-      id,numero,created_at,created_by,moeda,subtotal,valor_ipi,total,transportadora,data_entrega,observacoes_transporte,observacoes,
+      id,numero,created_at,created_by,moeda,subtotal,valor_ipi,total,transportadora,data_entrega,observacoes_transporte,observacoes,ptax_faturamento,
       clientes (codigo,razao_social,municipio,uf),
       vendedores (nome,email),
       filiais (nome,uf),
@@ -86,6 +87,16 @@ Deno.serve(async (req) => {
     const to = vendedor?.email || userData.user.email
     if (!to) throw new Error('O pedido não possui e-mail de vendedor.')
 
+    let ptax = pedido.ptax_faturamento
+    if (ptax?.status !== 'DEFINIDA') {
+      const consulta = await consultarPtaxFaturamento(pedido.created_at)
+      const { data: snapshot, error: snapshotError } = await admin.rpc('registrar_ptax_faturamento', {
+        p_pedido_id: pedido.id, p_valor: consulta.valor, p_referencia: consulta.referencia,
+      })
+      if (snapshotError || !snapshot) throw new Error('Não foi possível registrar a PTAX do pedido. Tente reenviar a confirmação.')
+      ptax = snapshot
+    }
+
     const rows = (itens || []).map((i: any) => {
       const p = Array.isArray(i.produtos) ? i.produtos[0] : i.produtos
       return `<tr>
@@ -106,6 +117,7 @@ Deno.serve(async (req) => {
       </div>
       <div style="padding:20px;border:1px solid #e2e8f0;border-top:0">
         <p><b>Data/hora do pedido (Brasília):</b> ${esc(dataHoraBrasilia(pedido.created_at))}</p>
+        <p style="padding:12px;background:#f5f7fb;border-left:3px solid #19337f">${esc(textoPtaxFaturamento(ptax))}</p>
         <p><b>Vendedor:</b> ${esc(vendedor?.nome)}</p>
         <p><b>Cliente:</b> ${esc(cliente?.codigo)} — ${esc(cliente?.razao_social)} • ${esc(cliente?.municipio)}/${esc(cliente?.uf)}</p>
         <p><b>Filial:</b> ${esc(filial?.nome)} • <b>Prazo:</b> ${esc(prazo?.descricao || '—')} • <b>Frete:</b> ${esc(frete?.descricao || '—')}</p>

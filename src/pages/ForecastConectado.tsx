@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { UsuarioApp } from '../types'
 import { Loading } from '../components/Loading'
 import { Forecast } from './Forecast'
 import { LancarForecast } from './LancarForecast'
 import { carregarForecastDados, type ForecastDados } from '../lib/forecastSupabase'
 import { HistoricoFaturamento } from './HistoricoFaturamento'
+const ImportarForecast = lazy(() => import('./ImportarForecast').then(m => ({default:m.ImportarForecast})))
 
 function ForecastConectado({usuario,modo,onConsultar}:{usuario:UsuarioApp;modo:'consulta'|'lancamento';onConsultar?:()=>void}) {
   const [dados,setDados]=useState<ForecastDados|null>(null)
@@ -23,7 +24,9 @@ function ForecastConectado({usuario,modo,onConsultar}:{usuario:UsuarioApp;modo:'
 }
 export function ConsultarForecastSupabase({usuario}:{usuario:UsuarioApp}) {
   const [historico,setHistorico]=useState(false)
-  return <><div className="forecast-tabs" style={{margin:'24px 28px 0'}} aria-label="Previsões ou compras realizadas"><button type="button" aria-pressed={!historico} onClick={()=>setHistorico(false)}>Previsões de forecast</button><button type="button" aria-pressed={historico} onClick={()=>setHistorico(true)}>Histórico faturado</button></div>{historico?<HistoricoFaturamento usuario={usuario}/>:<ForecastConectado usuario={usuario} modo="consulta"/>}</>
+  const [planilha,setPlanilha]=useState(false),[versao,setVersao]=useState(0)
+  return <><div className="forecast-tabs" style={{margin:'24px 28px 0'}} aria-label="Previsões, compras realizadas ou planilha"><button type="button" aria-pressed={!historico&&!planilha} onClick={()=>{setHistorico(false);setPlanilha(false)}}>Previsões de forecast</button><button type="button" aria-pressed={historico&&!planilha} onClick={()=>{setHistorico(true);setPlanilha(false)}}>Histórico faturado</button><button type="button" aria-pressed={planilha} onClick={()=>setPlanilha(true)}>{usuario.perfil==='ADMIN'?'Planilha e importação':'Planilha base'}</button></div>{planilha?<Suspense fallback={<Loading texto="Preparando planilha..."/>}><ImportarForecast usuario={usuario} onConcluido={()=>setVersao(v=>v+1)}/></Suspense>:historico?<HistoricoFaturamento usuario={usuario}/>:<ForecastConectado key={versao} usuario={usuario} modo="consulta"/>}</>
 }
 export function LancarForecastSupabase({usuario,onConsultar}:{usuario:UsuarioApp;onConsultar:()=>void}) {return <ForecastConectado usuario={usuario} modo="lancamento" onConsultar={onConsultar}/>}
+
 

@@ -11,7 +11,7 @@ export interface DocumentoCotacao {
  prazo_pagamento?: {codigo?: string | null; descricao: string} | null;
  frete?: {codigo?: string | null; descricao: string} | null;
  itens: Array<{codigo: string|null; produto: string; ncm?: string|null; colour_index?: string|null; quantidade: number|null; preco_net?: number; preco_final: number;
- filial_origem_id?: string | null; fiscal?: {filial_origem_id?: string | null}; filial_faturamento?: FilialFaturamento;
+ prazo_entrega?: string; filial_origem_id?: string | null; fiscal?: {filial_origem_id?: string | null}; filial_faturamento?: FilialFaturamento;
  aliquota_icms: number|null; ipi: number; total_item: number|null}>;
  subtotal: number|null; valor_ipi: number|null; total: number|null; observacoes?: string;
 }
@@ -108,7 +108,7 @@ export function criarPdfCotacao(original: DocumentoCotacao) {
  const temQuantidade=c.itens.some(i=>i.quantidade!=null)
  autoTable(doc,{...tablePage,startY:y,head:[['Produto',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹','ICMS',...(temQuantidade?['Total²']:[])]],
  body:c.itens.map(i=>[
-  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.ipi>0?`IPI: ${pct(i.ipi)}`:'',varios?`Faturamento: ${i.filial_faturamento?.nome||'A confirmar'}`:''].filter(Boolean).join('\n'),
+  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.prazo_entrega?`Prazo de entrega: ${i.prazo_entrega}`:'',i.ipi>0?`IPI: ${pct(i.ipi)}`:'',varios?`Faturamento: ${i.filial_faturamento?.nome||'A confirmar'}`:''].filter(Boolean).join('\n'),
   ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
   i.preco_net==null?'-':money(i.preco_net),money(i.preco_final),icms(i.aliquota_icms),
   ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
