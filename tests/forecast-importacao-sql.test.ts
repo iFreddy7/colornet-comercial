@@ -34,5 +34,13 @@ test('Carteira inválida e mês malformado não são aceitos',async()=>{
  await assert.rejects(()=>run(105,[{...plano(2),vendedor_id:id(11)}]),/carteira/)
  await assert.rejects(()=>run(106,[plano(2,{'2026-13':1})]),/quantidade inválida/)
 })
+test('Lote de carteira aceita mais de 100 clientes sem ampliar permissões',async()=>{
+ await db.exec(await readFile(new URL('../supabase/migrations/20261013183039_forecast_importacao_carteiras_500.sql',import.meta.url),'utf8'))
+ await db.exec(`insert into clientes select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'${id(10)}',true from generate_series(1000,1500) n`)
+ const plans=Array.from({length:142},(_,i)=>plano(0,{'2026-10':1},1000+i))
+ await assert.rejects(()=>run(301,plans,2),/Somente ADMIN/)
+ const r=await run(300,plans);assert.equal(r.planos_alterados,142)
+ await assert.rejects(()=>run(302,Array.from({length:501},(_,i)=>plano(0,{'2026-10':1},1000+i))),/500 carteiras/)
+})
 test.after(()=>db.close())
 
