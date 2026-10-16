@@ -47,7 +47,18 @@ export function lerCarteiraXlsx(wb:ExcelJS.Workbook):LeituraCarteira {
   const sheet=wb.getWorksheet('Forecast')!
   const titulo=textoSimples(sheet.getCell('A1')).match(/^Forecast de faturamento\s*[—–-]\s*(.+)$/i)
   if(!titulo||normalNome(textoSimples(sheet.getCell('A5')))!=='CLIENTE / PRODUTO'||normalNome(textoSimples(sheet.getCell('B5')))!=='NIVEL')throw Error('Use a planilha base do portal ou o modelo Forecast de faturamento, mantendo os cabeçalhos.')
-  if(sheet.rowCount>2507)throw Error('Importe até 2.000 produtos e 500 grupos de clientes por arquivo.')
+  // Excel pode salvar células ou formatação na última linha da folha.
+  // O limite se aplica aos registros, não à posição física da última célula.
+  const linhasPreenchidas:number[]=[]
+  let totalProdutos=0,totalClientes=0
+  sheet.eachRow((linha,row)=>{
+    if(row<8)return
+    linhasPreenchidas.push(row)
+    const nivel=normalNome(textoSimples(linha.getCell(2)))
+    if(nivel==='PRODUTO')totalProdutos++
+    if(nivel==='CLIENTE')totalClientes++
+    if(totalProdutos>2000||totalClientes>500||linhasPreenchidas.length>2500)throw Error('Importe até 2.000 produtos e 500 grupos de clientes por arquivo.')
+  })
   const meses:Array<{col:number;mes:string}>=[],seen=new Set<string>()
   let fimMeses=false
   for(let col=6;col<=sheet.columnCount;col++) {
@@ -63,7 +74,7 @@ export function lerCarteiraXlsx(wb:ExcelJS.Workbook):LeituraCarteira {
   if(!meses.length||meses.length>36)throw Error('Informe de 1 a 36 meses nas colunas a partir de F.')
   const out:LeituraCarteira={vendedor:titulo[1].trim(),linhas:[],erros:[],ignoradas:0,arredondadas:0}
   let grupo:GrupoCarteira|null=null,produtos=0
-  for(let row=8;row<=sheet.rowCount;row++) {
+  for(const row of linhasPreenchidas) {
     try {
       const nivel=normalNome(textoSimples(sheet.getCell(row,2)))
       if(nivel==='CLIENTE') {
@@ -71,7 +82,10 @@ export function lerCarteiraXlsx(wb:ExcelJS.Workbook):LeituraCarteira {
         const origem=textoSimples(sheet.getCell(row,1))
         grupo={linha:row,origem,...separarCodigo(origem)};continue
       }
-      if(!nivel&&!textoSimples(sheet.getCell(row,1)))continue
+      if(!nivel&&!textoSimples(sheet.getCell(row,1))) {
+        if(meses.some(({col})=>{const v=sheet.getCell(row,col).value;return v!=null&&v!==''}))throw Error('Há quantidades preenchidas sem cliente e produto identificados. Informe o produto na linha correta ou apague essas quantidades.')
+        continue
+      }
       if(nivel!=='PRODUTO')throw Error('Nível desconhecido: use Cliente ou Produto, sem alterar a estrutura do modelo.')
       if(++produtos>2000)throw Error('Limite de 2.000 produtos por arquivo.')
       if(!grupo)throw Error('Produto sem cliente acima dele.')

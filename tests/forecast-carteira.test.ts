@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import ExcelJS from 'exceljs'
 import {lerImportacaoForecast} from '../src/lib/forecastImportacao.ts'
+import {lerCarteiraXlsx} from '../src/lib/forecastCarteiraXlsx.ts'
 const dados={vendedores:[{id:'v',codigo:'01',nome:'ERIC GAMA',ativo:true}],clientes:[{id:'c',codigo:'00000123 / 01',nome:'Cliente A',ativo:true,vendedorId:'v'}],produtos:[{id:'p',codigo:'AD010.2BD25',nome:'Produto A',ativo:true},{id:'p2',codigo:'AD010.7BD25',nome:'Produto A',ativo:true}],planos:[{cliente_id:'c',vendedor_id:'v',documento:{p:{'2026-10':90,'2026-11':30}},revisao:3,atualizado_em:''}]}
 async function fixture(edit?:(s:ExcelJS.Worksheet,h:ExcelJS.Worksheet)=>void) {
  const wb=new ExcelJS.Workbook(),h=wb.addWorksheet('Histórico'),s=wb.addWorksheet('Forecast')
@@ -17,6 +18,24 @@ async function fixture(edit?:(s:ExcelJS.Worksheet,h:ExcelJS.Worksheet)=>void) {
  for(let c=6;c<=20;c++)s.getCell(9,c).value={formula:'$D9*(1+$E9)',result:999999}
  edit?.(s,h);return new Uint8Array(await wb.xlsx.writeBuffer())
 }
+
+test('Última linha formatada não conta como produto; quantidades sem identificação são sinalizadas',async()=>{
+ const wb=new ExcelJS.Workbook();await wb.xlsx.load(await fixture())
+ const s=wb.getWorksheet('Forecast')!
+ s.getCell('F1048576').numFmt='0.000'
+ assert.deepEqual(lerCarteiraXlsx(wb).erros,[])
+ s.getCell('F1048576').value=25
+ const r=lerCarteiraXlsx(wb)
+ assert.equal(r.linhas.length,1)
+ assert.match(r.erros.join(' '),/Linha 1048576: Há quantidades preenchidas sem cliente e produto/)
+})
+
+test('Limite de grupos considera clientes preenchidos, inclusive sem produtos',async()=>{
+ const wb=new ExcelJS.Workbook();await wb.xlsx.load(await fixture())
+ const s=wb.getWorksheet('Forecast')!
+ for(let i=0;i<500;i++)s.getRow(10+i).values=[`${i}-Cliente`,'Cliente']
+ assert.throws(()=>lerCarteiraXlsx(wb),/500 grupos/)
+})
 test('Carteira lê 15 meses, recalcula fórmulas e ignora cache, totais e histórico',async()=>{
  const r=await lerImportacaoForecast(await fixture((s,h)=>{s.getCell('B3').value=2;h.getCell('AM8').value=20;h.getCell('AN8').value=40;s.getCell('E9').value=.1}),dados)
  assert.deepEqual(r.erros,[]);assert.equal(r.formato,'carteira');assert.equal(r.planos.length,1);assert.equal(r.planos[0].revisao,3)
