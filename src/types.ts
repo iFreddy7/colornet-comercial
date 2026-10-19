@@ -106,6 +106,7 @@ export interface CalculoFiscal {
 }
 
 export interface ItemPedidoLocal {
+  prazo_entrega?: string
   idLocal: string
   produto_id: string
   codigo: string | null

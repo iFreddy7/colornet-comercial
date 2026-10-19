@@ -2,6 +2,7 @@ import { temVisaoComercial } from '../lib/permissoes'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { PedidoItemBanco, PedidoResumo as PedidoResumoBase, UsuarioApp } from '../types'
+import { MarcarFaturado } from '../components/MarcarFaturado'
 import { Loading } from '../components/Loading'
 import { dataHoraBrasilia } from '../lib/dataHora'
 import './Pedidos.css'
@@ -9,6 +10,8 @@ import './Pedidos.css'
 // Permite atualizar esta tela mesmo se types.ts ainda for de um pacote anterior.
 type PedidoResumo = PedidoResumoBase & {
   created_by: string
+  faturamento_aviso_status: string
+  pedido_eventos?: Array<{ tipo: string; criado_em: string; detalhes: { registrado_por_nome?: string } }>
   cancelado_em?: string | null
   motivo_cancelamento?: string | null
 }
@@ -56,7 +59,10 @@ export function Pedidos({
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
+  const [avisoEmail, setAvisoEmail] = useState('')
+  const [enviandoAvisoId, setEnviandoAvisoId] = useState<string | null>(null)
 
+  const [faturandoId, setFaturandoId] = useState<string | null>(null)
   const [cancelandoId, setCancelandoId] = useState<string | null>(null)
   const [motivoCancelamento, setMotivoCancelamento] = useState('')
   const [salvandoCancelamento, setSalvandoCancelamento] = useState(false)
@@ -80,6 +86,8 @@ export function Pedidos({
         created_at,
         created_by,
         status,
+        faturamento_aviso_status,
+        pedido_eventos(tipo,criado_em,detalhes),
         cancelado_em,
         motivo_cancelamento,
         moeda,
@@ -138,6 +146,48 @@ export function Pedidos({
       ...atual,
       [pedidoId]: (data ?? []) as PedidoItemBanco[],
     }))
+  }
+
+  async function enviarAvisoFaturado(pedido: PedidoResumo) {
+    setEnviandoAvisoId(pedido.id); setAvisoEmail('')
+    try {
+      const { data, error } = await supabase.functions.invoke('pedido-faturado-email', { body: { pedido_id: pedido.id } })
+      if (error) {
+        setAvisoEmail('O faturamento está salvo. Não foi possível confirmar o envio do e-mail; confira o status abaixo.')
+      } else if (data?.status === 'ENVIADO') {
+        setAvisoEmail('Aviso de pedido faturado enviado ao vendedor, João e Márcia.')
+      } else {
+        setAvisoEmail(data?.erro || (data?.aguarde ? 'Aguarde alguns segundos antes de tentar novamente.' : 'O faturamento está salvo. Confira abaixo a situação do aviso por e-mail.'))
+      }
+    } catch {
+      setAvisoEmail('O faturamento está salvo. Não foi possível confirmar o envio do e-mail; confira o status abaixo.')
+    } finally { setEnviandoAvisoId(null) }
+  }
+
+  async function repetirAvisoFaturado(pedido: PedidoResumo) {
+    if (enviandoAvisoId) return
+    await enviarAvisoFaturado(pedido)
+    await carregar()
+  }
+
+  async function marcarFaturado(pedido: PedidoResumo): Promise<boolean> {
+    if (faturandoId || salvandoCancelamento) return false
+    setFaturandoId(pedido.id); setErro(''); setSucesso(''); setAvisoEmail('')
+    try {
+      const { data, error } = await supabase.rpc('marcar_pedido_faturado', { p_pedido_id: pedido.id })
+      if (error) { setErro(error.message); return false }
+      if (data?.sucesso !== true || data?.status !== 'FATURADO' || data?.pedido_id !== pedido.id) {
+        setErro('O portal não confirmou a marcação. Atualize a lista antes de tentar novamente.'); return false
+      }
+      setCancelandoId(null); setMotivoCancelamento('')
+      setSucesso(data.ja_faturado ? `${pedido.numero} já estava marcado como faturado.` : `${pedido.numero} marcado como faturado.`)
+      await enviarAvisoFaturado(pedido)
+      await carregar()
+      return true
+    } catch {
+      setErro('Não foi possível confirmar a marcação. Atualize a lista para conferir o status antes de tentar novamente.')
+      return false
+    } finally { setFaturandoId(null) }
   }
 
   function abrirCancelamento(pedidoId: string) {
@@ -248,6 +298,7 @@ export function Pedidos({
 
       {erro && <div className="alert error">{erro}</div>}
       {sucesso && <div className="alert success">{sucesso}</div>}
+      {avisoEmail && <div className="alert" role="status">{avisoEmail}</div>}
 
       {carregando ? (
         <Loading texto="Buscando pedidos..." />
@@ -262,6 +313,8 @@ export function Pedidos({
             const podeOperar = visaoComercial || pedido.created_by === usuario.id
             const podeCancelar = podeOperar && ['ABERTO', 'ENVIADO'].includes(pedido.status)
             const mostrandoCancelamento = cancelandoId === pedido.id
+            const faturamento = pedido.pedido_eventos?.find(e => e.tipo === 'FATURAMENTO_MANUAL')
+            const podeFaturar = usuario.ativo && visaoComercial && !cancelado && ['ABERTO', 'ENVIADO'].includes(pedido.status)
 
             return (
               <article
@@ -304,7 +357,7 @@ export function Pedidos({
 
                     <span
                       className={
-                        cancelado ? 'badge danger' : 'badge neutral'
+                        cancelado ? 'badge danger' : pedido.status === 'FATURADO' ? 'badge success' : 'badge neutral'
                       }
                     >
                       {cancelado ? 'CANCELADO' : pedido.status}
@@ -316,6 +369,7 @@ export function Pedidos({
                   </button>
 
                   <div className="order-action-buttons">
+                    {podeFaturar && <MarcarFaturado numero={pedido.numero} disabled={faturandoId !== null || salvandoCancelamento} onConfirmar={() => marcarFaturado(pedido)} />}
                     <button
                       type="button"
                       className="secondary-button duplicate-button"
@@ -330,7 +384,7 @@ export function Pedidos({
                         type="button"
                         className="danger-button"
                         onClick={() => abrirCancelamento(pedido.id)}
-                        disabled={!podeCancelar || salvandoCancelamento}
+                        disabled={!podeCancelar || salvandoCancelamento || faturandoId !== null}
                         title={podeCancelar ? undefined : 'Cancelamento disponível para pedidos ABERTO ou ENVIADO.'}
                       >
                         Cancelar pedido
@@ -338,6 +392,12 @@ export function Pedidos({
                     )}
                   </div>
                 </div>
+
+                {pedido.status === 'FATURADO' && faturamento && <div className="invoiced-order-note">Marcado como faturado em {dateTime(faturamento.criado_em)} por <strong>{faturamento.detalhes?.registrado_por_nome || 'Usuário'}</strong>.</div>}
+                {pedido.status === 'FATURADO' && pedido.faturamento_aviso_status !== 'NAO_SOLICITADO' && <div className="invoiced-email-note" role="status">
+                  <span>{({ PENDENTE: 'E-mail de faturamento pendente.', ENVIANDO: 'Envio de e-mail em andamento.', ENVIADO: 'E-mail de faturamento enviado ao vendedor, João e Márcia.', ERRO: 'Não foi possível enviar o e-mail a todos os destinatários.', INCERTO: 'Envio sem confirmação. Confira o recebimento com os destinatários antes de solicitar suporte.' } as Record<string, string>)[pedido.faturamento_aviso_status]}</span>
+                  {usuario.ativo && visaoComercial && ['PENDENTE','ERRO','ENVIANDO'].includes(pedido.faturamento_aviso_status) && <button type="button" className="secondary-button" disabled={enviandoAvisoId !== null || faturandoId !== null} onClick={() => void repetirAvisoFaturado(pedido)}>{enviandoAvisoId === pedido.id ? 'Verificando…' : pedido.faturamento_aviso_status === 'ENVIANDO' ? 'Verificar envio' : 'Tentar enviar e-mail'}</button>}
+                </div>}
 
                 {cancelado && (
                   <div className="cancelled-order-note">
@@ -390,7 +450,7 @@ export function Pedidos({
                         type="button"
                         className="danger-button"
                         onClick={() => confirmarCancelamento(pedido)}
-                        disabled={salvandoCancelamento}
+                        disabled={salvandoCancelamento || faturandoId !== null}
                       >
                         {salvandoCancelamento
                           ? 'Cancelando...'

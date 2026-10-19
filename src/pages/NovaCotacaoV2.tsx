@@ -1,3 +1,4 @@
+import { dataCotacaoMaisDias as dataIsoMaisDias, erroValidadeCotacao } from '../lib/validadeCotacao'
 import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { identificarFilial } from '../lib/filiaisFaturamento'
 import { carregarClientesComerciais } from '../lib/clientesComerciais'
@@ -45,15 +46,6 @@ function idLocal() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function dataIsoMaisDias(dias: number) {
-  const data = new Date()
-  data.setHours(12, 0, 0, 0)
-  data.setDate(data.getDate() + dias)
-  const ano = data.getFullYear()
-  const mes = String(data.getMonth() + 1).padStart(2, '0')
-  const dia = String(data.getDate()).padStart(2, '0')
-  return `${ano}-${mes}-${dia}`
-}
 
 export function NovaCotacaoV2({
   usuario,
@@ -87,6 +79,7 @@ export function NovaCotacaoV2({
   const [resultadosProduto, setResultadosProduto] = useState<Produto[]>([])
   const [produto, setProduto] = useState<Produto | null>(null)
   const [quantidade, setQuantidade] = useState('')
+  const [prazoEntrega, setPrazoEntrega] = useState('')
   const [precoNet, setPrecoNet] = useState('')
   const [precoFinal, setPrecoFinal] = useState('')
   const [entradaPreco, setEntradaPreco] = useState<'NET' | 'FINAL'>('NET')
@@ -134,6 +127,7 @@ export function NovaCotacaoV2({
     setObservacoes(saved.fields.observacoes || '')
     setProdutoBusca(saved.fields.produtoBusca || '')
     setQuantidade(saved.fields.quantidade || '')
+    setPrazoEntrega(saved.fields.prazoEntrega || '')
     setPrecoNet(saved.fields.precoNet || '')
     setEntradaPreco(saved.fields.entradaPreco === 'FINAL' ? 'FINAL' : 'NET')
     setObservacaoPreco(saved.fields.observacaoPreco || '')
@@ -147,7 +141,7 @@ export function NovaCotacaoV2({
   }
   const draft = useCommercialDraft(
     draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
-    { fields: { editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    { fields: { prazoEntrega, editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
     Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || filialId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
     !carregando, restaurarRascunho
   )
@@ -289,7 +283,7 @@ export function NovaCotacaoV2({
     setProduto(item)
     setProdutoBusca(item.nome)
     setResultadosProduto([])
-    setQuantidade('')
+    setQuantidade(''); setPrazoEntrega('')
     setEntradaPreco('NET')
     setPrecoNet('')
     setPrecoFinal('')
@@ -303,7 +297,7 @@ export function NovaCotacaoV2({
     setProduto(null)
     setProdutoBusca('')
     setResultadosProduto([])
-    setQuantidade('')
+    setQuantidade(''); setPrazoEntrega('')
     setPrecoNet('')
     setPrecoFinal('')
     setFaixa(null)
@@ -376,7 +370,7 @@ export function NovaCotacaoV2({
     fiscalSeq.current += 1
     setEditandoId('')
     setProduto(null); setProdutoBusca(''); setResultadosProduto([])
-    setQuantidade(''); setPrecoNet(''); setPrecoFinal('')
+    setQuantidade(''); setPrazoEntrega(''); setPrecoNet(''); setPrecoFinal('')
     setEntradaPreco('NET'); setFaixa(null); setCalculo(null); setObservacaoPreco('')
     setErro('')
   }
@@ -394,6 +388,7 @@ export function NovaCotacaoV2({
       setEditandoId(item.idLocal)
       setProduto(data as Produto); setProdutoBusca(item.produto); setResultadosProduto([])
       setQuantidade(item.quantidade == null ? '' : String(item.quantidade))
+      setPrazoEntrega(item.prazo_entrega || '')
       setEntradaPreco(item.entrada_preco || 'NET')
       setPrecoNet(String(item.preco_net)); setPrecoFinal(String(item.preco_final))
       setFaixa(item.faixa_interna); setObservacaoPreco(item.observacao_preco || '')
@@ -406,6 +401,7 @@ export function NovaCotacaoV2({
 
   async function adicionarItem() {
     if (adicionandoRef.current) return
+    if (!prazoEntrega.trim() || prazoEntrega.trim().length > 120) { setErro('Informe o prazo de entrega deste produto (até 120 caracteres).'); return }
     adicionandoRef.current = true
     setProcessandoItem(true)
 
@@ -447,6 +443,7 @@ export function NovaCotacaoV2({
 
       const novo: ItemPedidoLocal = {
         idLocal: editandoId || idLocal(),
+        prazo_entrega: prazoEntrega.trim(),
         produto_id: produto.id,
         codigo: produto.codigo_protheus,
         produto: produto.nome,
@@ -506,7 +503,9 @@ export function NovaCotacaoV2({
     if (!clienteId) return setErro('Selecione o cliente.')
     if (!filiais.some(f => f.id === filialId)) return setErro('Selecione a filial de faturamento.')
     if (itens.some(item => item.filial_origem_id !== filialId)) return setErro('Há itens calculados para outra filial ou sem filial. Remova e adicione esses produtos novamente para revisar os preços.')
-    if (!validade) return setErro('Informe a validade da proposta.')
+    const erroValidade = erroValidadeCotacao(validade)
+    if (erroValidade) return setErro(erroValidade)
+    if (itens.some(item => !item.prazo_entrega?.trim())) return setErro('Edite os produtos e informe o prazo de entrega de cada um.')
     if (!prazoId) return setErro('Selecione o prazo de pagamento.')
     if (!freteId) return setErro('Selecione o tipo de frete: CIF ou FOB.')
     if (admin && clienteSelecionado?.vendedor_id == null && !vendedorIdAdmin) {
@@ -538,6 +537,7 @@ export function NovaCotacaoV2({
 
     const payloadItens = itens.map((item) => ({
       produto_id: item.produto_id,
+      prazo_entrega: item.prazo_entrega,
       quantidade: item.quantidade,
       preco_net: item.preco_net,
       preco_final: item.preco_final,
@@ -753,9 +753,12 @@ export function NovaCotacaoV2({
             <input
               type="date"
               min={dataIsoMaisDias(0)}
+              max={dataIsoMaisDias(30)}
+              aria-label="Validade da proposta"
               value={validade}
               onChange={(e) => setValidade(e.target.value)}
             />
+            <small className="field-help">Máximo de 30 dias corridos após a inclusão da cotação.</small>
           </div>
 
           <div className="field autocomplete-wrap">
@@ -898,6 +901,11 @@ export function NovaCotacaoV2({
               </div>
             )}
 
+            <div className="field">
+              <label htmlFor="prazo-entrega-produto">Prazo de entrega do produto *</label>
+              <input id="prazo-entrega-produto" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)} maxLength={120} placeholder="Ex.: 10 dias úteis após a confirmação do pedido" />
+              <small>Informe a quantidade de dias, se são úteis ou corridos e a condição de início do prazo.</small>
+            </div>
             <div className="form-grid compact">
               <div className="field">
                 <label>Quantidade (opcional)</label>
@@ -1017,6 +1025,7 @@ export function NovaCotacaoV2({
                     <strong>{item.produto}</strong>
                     <small>{item.codigo || 'SEM CÓDIGO'} • NCM {item.ncm || 'Não informado'}</small>
                     <small>Colour Index: {item.colour_index || 'Não informado'}</small>
+                    <small>Prazo de entrega: {item.prazo_entrega || 'Informe ao editar o item'}</small>
                   </td>
                   <td>{item.quantidade == null ? '—' : item.quantidade.toLocaleString('pt-BR')}</td>
                   <td>{money(item.preco_net, moeda)}</td>

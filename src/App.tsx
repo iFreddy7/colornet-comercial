@@ -1,6 +1,6 @@
 import { Relatorios } from './pages/Relatorios'
 import { temVisaoComercial } from './lib/permissoes'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import type { UsuarioApp } from './types'
@@ -18,6 +18,9 @@ import { Cotacoes } from './pages/Cotacoes'
 import { ConverterCotacao } from './pages/ConverterCotacao'
 import { Admin } from './pages/Admin'
 import { startsRecovery, cleanRecoveryUrl, clearRecovery } from './lib/recoveryContext'
+
+const Forecast = lazy(() => import('./pages/ForecastConectado').then(module => ({ default: module.ConsultarForecastSupabase })))
+const LancarForecast = lazy(() => import('./pages/ForecastConectado').then(module => ({ default: module.LancarForecastSupabase })))
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -93,6 +96,8 @@ function App() {
     {tela === 'cotacoes' && <Cotacoes key={`cotacoes-${refreshCotacoes}`} usuario={usuario} onConverter={converterCotacao} />}
     {tela === 'produtos' && <Produtos usuario={usuario} />}
     {tela === 'clientes' && <Clientes usuario={usuario} />}
+    {tela === 'forecast' && <Suspense fallback={<Loading texto="Abrindo forecast..." />}><Forecast key={usuario.id} usuario={usuario} /></Suspense>}
+    {tela === 'novo-forecast' && <Suspense fallback={<Loading texto="Abrindo formulário..." />}><LancarForecast key={usuario.id} usuario={usuario} onConsultar={() => navegar('forecast')} /></Suspense>}
     {tela === 'relatorios' && temVisaoComercial(usuario) && <Relatorios usuario={usuario} />}
     {tela === 'admin' && usuario.perfil === 'ADMIN' && <Admin usuario={usuario} />}
   </Layout>
