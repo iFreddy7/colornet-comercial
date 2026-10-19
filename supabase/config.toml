@@ -26,3 +26,7 @@ verify_jwt = false
 # O diagnóstico SMTP aceita exclusivamente a secret key do próprio projeto.
 [functions.cotacao-decisao-email]
 verify_jwt = false
+
+# Valida JWT com auth.getUser e perfil ativo antes de reservar qualquer envio.
+[functions.pedido-faturado-email]
+verify_jwt = false

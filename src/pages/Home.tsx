@@ -2,64 +2,8 @@ import { temVisaoComercial } from '../lib/permissoes'
 import { Icon } from '../components/Icon'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { DashboardStats, UsuarioApp } from '../types'
+import type { UsuarioApp } from '../types'
 import { Loading } from '../components/Loading'
-
-type PedidoDashboard = {
-  id: string
-  status: string
-  moeda: string
-  vendedor_id: string | null
-  vendedores: { nome: string } | Array<{ nome: string }> | null
-  ptax_valor: number | string | null
-  ptax_data_referencia: string | null
-  pedido_itens: Array<{
-    quantidade: number | string | null
-    preco_net: number | string | null
-  }> | null
-}
-
-type VendedorResumo = {
-  id: string
-  nome: string
-  pedidos: number
-  netUsd: number
-}
-
-function relNome(value: PedidoDashboard['vendedores']) {
-  if (!value) return 'Sem vendedor'
-  return Array.isArray(value) ? value[0]?.nome || 'Sem vendedor' : value.nome || 'Sem vendedor'
-}
-
-function valorNetOriginal(pedido: PedidoDashboard) {
-  return (pedido.pedido_itens ?? []).reduce((total, item) => {
-    const quantidade = Number(item.quantidade ?? 0)
-    const precoNet = Number(item.preco_net ?? 0)
-    return total + quantidade * precoNet
-  }, 0)
-}
-
-function valorNetPedidoUsd(pedido: PedidoDashboard) {
-  const netOriginal = valorNetOriginal(pedido)
-
-  if (pedido.moeda === 'USD') return netOriginal
-
-  if (pedido.moeda === 'BRL') {
-    const ptax = Number(pedido.ptax_valor ?? 0)
-    return ptax > 0 ? netOriginal / ptax : 0
-  }
-
-  return 0
-}
-
-function usd(valor: number) {
-  return valor.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 function periodoMesAtual() {
   const partes = new Intl.DateTimeFormat('en-CA', {
@@ -88,202 +32,44 @@ function periodoMesAtual() {
 }
 
 export function Home({ usuario }: { usuario: UsuarioApp }) {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [pedidosDashboard, setPedidosDashboard] = useState<PedidoDashboard[]>([])
+  const [stats, setStats] = useState<{ clientes: number; produtos: number; pedidos: number } | null>(null)
   const [erro, setErro] = useState('')
-
-  const admin = temVisaoComercial(usuario)
+  const [tentativa, setTentativa] = useState(0)
+  const gestao = temVisaoComercial(usuario)
   const periodo = useMemo(() => periodoMesAtual(), [])
-
   useEffect(() => {
-    carregar()
-  }, [usuario.id])
-
-  async function contar(tabela: string) {
-    const { count, error } = await supabase
-      .from(tabela)
-      .select('*', { count: 'exact', head: true })
-
-    if (error) throw error
-    return count ?? 0
-  }
-
-  async function carregar() {
-    setErro('')
-
-    try {
-      const [clientes, produtos, precos, filiais, pedidosResult] = await Promise.all([
-        contar('clientes'),
-        contar('produtos'),
-        contar('precos'),
-        contar('filiais'),
-        supabase
-          .from('pedidos')
-          .select('id,status,moeda,vendedor_id,ptax_valor,ptax_data_referencia,vendedores(nome),pedido_itens(quantidade,preco_net)')
-          .gte('created_at', periodo.inicio)
-          .lt('created_at', periodo.fim)
-          .order('created_at', { ascending: false }),
-      ])
-
-      if (pedidosResult.error) throw pedidosResult.error
-
-      const pedidos = (pedidosResult.data ?? []) as PedidoDashboard[]
-      const pedidosAtivos = pedidos.filter((pedido) => pedido.status !== 'CANCELADO')
-
-      setPedidosDashboard(pedidosAtivos)
-      setStats({
-        clientes,
-        produtos,
-        precos,
-        filiais,
-        pedidos: pedidosAtivos.length,
-      })
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Erro ao carregar dados.')
-    }
-  }
-
-  const netUsdTotal = useMemo(
-    () => pedidosDashboard.reduce((total, pedido) => total + valorNetPedidoUsd(pedido), 0),
-    [pedidosDashboard]
-  )
-
-  const pedidosBrlSemPtax = useMemo(
-    () => pedidosDashboard.filter((pedido) => pedido.moeda === 'BRL' && Number(pedido.ptax_valor ?? 0) <= 0).length,
-    [pedidosDashboard]
-  )
-
-  const porVendedor = useMemo(() => {
-    const mapa = new Map<string, VendedorResumo>()
-
-    for (const pedido of pedidosDashboard) {
-      const id = pedido.vendedor_id || 'sem-vendedor'
-      const atual = mapa.get(id) ?? {
-        id,
-        nome: relNome(pedido.vendedores),
-        pedidos: 0,
-        netUsd: 0,
+    let ativo = true
+    setStats(null); setErro('')
+    async function carregar() {
+      try {
+        const [clientes, produtos, pedidos] = await Promise.all([
+          supabase.from('clientes').select('id', { count: 'exact', head: true }),
+          supabase.from('produtos').select('id', { count: 'exact', head: true }),
+          supabase.from('pedidos').select('id', { count: 'exact', head: true })
+            .gte('created_at', periodo.inicio).lt('created_at', periodo.fim)
+            .or('status.neq.CANCELADO,status.is.null'),
+        ])
+        const error = clientes.error || produtos.error || pedidos.error
+        if (error) throw error
+        if (ativo) setStats({ clientes: clientes.count ?? 0, produtos: produtos.count ?? 0, pedidos: pedidos.count ?? 0 })
+      } catch {
+        if (ativo) setErro('Não foi possível carregar o painel. Tente novamente.')
       }
-
-      atual.pedidos += 1
-      atual.netUsd += valorNetPedidoUsd(pedido)
-      mapa.set(id, atual)
     }
-
-    return [...mapa.values()].sort((a, b) => b.netUsd - a.netUsd || b.pedidos - a.pedidos)
-  }, [pedidosDashboard])
-
-  return (
-    <section className="page dashboard-page">
-      <div className="page-header dashboard-header">
-        <div>
-          <span className="eyebrow">SEU PAINEL COMERCIAL</span>
-          <h1>Olá, {usuario.nome || 'bem-vindo'}.</h1>
-          <p>
-            {admin
-              ? `Visão geral de pedidos e desempenho comercial de ${periodo.label}.`
-              : `Acompanhe seus pedidos e o seu valor NET de ${periodo.label}.`}
-          </p>
-        </div>
-
-        <div className="status-pill">
-          <span className="status-dot" />
-          Dados atualizados
-        </div>
-      </div>
-
-      {erro && <div className="alert error">{erro}</div>}
-
-      {!stats ? (
-        <Loading texto="Consultando o banco..." />
-      ) : (
-        <>
-          <div className="stats-grid dashboard-main-stats">
-            <div className="stat-card dashboard-highlight">
-              <div className="metric-icon"><Icon name="orders" /></div>
-              <span>{admin ? 'Pedidos ativos no mês' : 'Meus pedidos no mês'}</span>
-              <strong>{stats.pedidos.toLocaleString('pt-BR')}</strong>
-              <small>pedidos cancelados não entram</small>
-            </div>
-
-            <div className="stat-card dashboard-highlight">
-              <div className="metric-icon"><Icon name="money" /></div>
-              <span>{admin ? 'NET do mês em US$' : 'Meu NET do mês em US$'}</span>
-              <strong className="dashboard-money">{usd(netUsdTotal)}</strong>
-              <small>soma NET em US$; pedidos BRL são convertidos pela PTAX registrada no dia</small>
-            </div>
-
-            <div className="stat-card">
-              <div className="metric-icon"><Icon name="clients" /></div>
-              <span>{admin ? 'Clientes' : 'Minha carteira'}</span>
-              <strong>{stats.clientes.toLocaleString('pt-BR')}</strong>
-              <small>{admin ? 'todos os clientes' : 'clientes liberados para você'}</small>
-            </div>
-
-            <div className="stat-card">
-              <div className="metric-icon"><Icon name="products" /></div>
-              <span>Produtos</span>
-              <strong>{stats.produtos.toLocaleString('pt-BR')}</strong>
-              <small>base comercial</small>
-            </div>
-          </div>
-
-          {pedidosBrlSemPtax > 0 && (
-            <div className="alert warning-box dashboard-note">
-              {pedidosBrlSemPtax} pedido(s) em R$ ainda não possuem PTAX histórica registrada e não entram no total em US$.
-            </div>
-          )}
-
-          {admin ? (
-            <div className="form-card dashboard-sellers">
-              <div className="section-title">
-                <span><Icon name="trend" /></span>
-                <div>
-                  <strong>Desempenho por vendedor</strong>
-                  <small>{periodo.label}: pedidos ativos e valor NET em dólar, com conversão histórica de pedidos em BRL.</small>
-                </div>
-              </div>
-
-              <div className="table-scroll">
-                <table className="dashboard-sellers-table">
-                  <thead>
-                    <tr>
-                      <th>Vendedor</th>
-                      <th>Pedidos</th>
-                      <th>NET em US$</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {porVendedor.map((item) => (
-                      <tr key={item.id}>
-                        <td><strong>{item.nome}</strong></td>
-                        <td>{item.pedidos.toLocaleString('pt-BR')}</td>
-                        <td><strong>{usd(item.netUsd)}</strong></td>
-                      </tr>
-                    ))}
-                    {!porVendedor.length && (
-                      <tr>
-                        <td colSpan={3} className="empty-cell">Nenhum pedido ativo registrado.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="welcome-panel dashboard-personal">
-              <div>
-                <span className="eyebrow">MEU DESEMPENHO • {periodo.label.toUpperCase()}</span>
-                <h2>{stats.pedidos.toLocaleString('pt-BR')} pedido(s) ativo(s)</h2>
-                <p>
-                  Seu valor NET acumulado convertido para dólar é <strong>{usd(netUsdTotal)}</strong>.
-                  Pedidos em BRL usam a PTAX registrada no momento da inclusão e pedidos cancelados são desconsiderados automaticamente.
-                </p>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  )
+    void carregar()
+    return () => { ativo = false }
+  }, [usuario.id, periodo, tentativa])
+  return <section className="page dashboard-page">
+    <div className="page-header dashboard-header">
+      <div><span className="eyebrow">SEU PAINEL COMERCIAL</span><h1>Olá, {usuario.nome || 'bem-vindo'}.</h1>
+        <p>Acompanhe {gestao ? 'os' : 'seus'} pedidos de {periodo.label} e consulte os cadastros disponíveis.</p></div>
+      {stats && <div className="status-pill"><span className="status-dot" />Dados atualizados</div>}
+    </div>
+    {erro ? <div className="alert error" role="alert">{erro} <button type="button" className="secondary-button" onClick={() => setTentativa(t => t + 1)}>Tentar novamente</button></div>
+      : !stats ? <Loading texto="Carregando painel..." /> : <div className="stats-grid dashboard-main-stats dashboard-overview">
+        <div className="stat-card dashboard-highlight"><div className="metric-icon"><Icon name="orders" /></div><span>{gestao ? 'Pedidos ativos no mês' : 'Meus pedidos no mês'}</span><strong>{stats.pedidos.toLocaleString('pt-BR')}</strong><small>Pedidos cancelados não entram</small></div>
+        <div className="stat-card"><div className="metric-icon"><Icon name="clients" /></div><span>{gestao ? 'Clientes' : 'Minha carteira'}</span><strong>{stats.clientes.toLocaleString('pt-BR')}</strong><small>{gestao ? 'Todos os clientes' : 'Clientes liberados para você'}</small></div>
+        <div className="stat-card"><div className="metric-icon"><Icon name="products" /></div><span>Produtos</span><strong>{stats.produtos.toLocaleString('pt-BR')}</strong><small>Base comercial</small></div>
+      </div>}
+  </section>
 }

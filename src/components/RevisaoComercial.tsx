@@ -41,6 +41,7 @@ export function RevisaoComercial({ tipo, campos, itens, moeda, observacoes, erro
         <tbody>{itens.map(item => <tr key={item.idLocal}>
           <td><strong>{item.produto}</strong><small>{item.codigo || 'SEM CÓDIGO'} • NCM {item.ncm || 'Não informado'}</small>
             <small>Colour Index: {item.colour_index || 'Não informado'}</small>
+            {item.prazo_entrega && <small>Prazo de entrega: {item.prazo_entrega}</small>}
             {item.observacao_preco && <small>Preço manual: {item.observacao_preco}</small>}
           </td>
           <td>{item.quantidade == null ? 'Não informada' : item.quantidade.toLocaleString('pt-BR')}</td>
