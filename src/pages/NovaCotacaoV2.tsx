@@ -1,3 +1,6 @@
+import { ChegadasProduto } from '../components/ChegadasProduto'
+import { ErroModal } from '../components/ErroModal'
+import { ProdutoCotacaoEditor, type ProdutoCotacaoRascunho } from '../components/ProdutoCotacaoEditor'
 import { dataCotacaoMaisDias as dataIsoMaisDias, erroValidadeCotacao } from '../lib/validadeCotacao'
 import { prepararDocumentoCotacaoPdf } from '../lib/documentoCotacaoPdf'
 import { identificarFilial } from '../lib/filiaisFaturamento'
@@ -57,6 +60,11 @@ export function NovaCotacaoV2({
   const admin = temVisaoComercial(usuario)
 
   const [titulo, setTitulo] = useState('')
+  const [tipoDocumento, setTipoDocumento] = useState<'COTACAO' | 'LISTA_PRECOS'>('COTACAO')
+  const [selecionados, setSelecionados] = useState<Produto[]>([])
+  const [filaProdutos, setFilaProdutos] = useState<Produto[]>([])
+  const [filaRascunho, setFilaRascunho] = useState<Record<string, ProdutoCotacaoRascunho>>({})
+  const prazoSeq = useRef(0)
   const [validade, setValidade] = useState(() => dataIsoMaisDias(7))
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [prazos, setPrazos] = useState<OpcaoCadastro[]>([])
@@ -114,7 +122,18 @@ export function NovaCotacaoV2({
       if (result.error) throw new Error('Não foi possível conferir o produto do rascunho. Tente novamente.')
       selected = result.data as Produto | null
     }
+    if (saved.fields.filaProdutos) {
+      const fila = JSON.parse(saved.fields.filaProdutos) as Array<{ id: string; dados: ProdutoCotacaoRascunho }>
+      if (!Array.isArray(fila) || fila.length > 500 || fila.some(p => typeof p.id !== 'string')) throw new Error('Rascunho de produtos inválido.')
+      if (fila.length) {
+        const result = await supabase.from('produtos').select('*,precos(*)').in('id', fila.map(p => p.id)).eq('ativo', true)
+        if (result.error || result.data?.length !== fila.length) throw new Error('Há produto indisponível no rascunho. Confira o cadastro antes de restaurar.')
+        setFilaRascunho(Object.fromEntries(fila.map(p => [p.id, p.dados])))
+        setFilaProdutos(fila.map(p => result.data.find(x => x.id === p.id) as Produto))
+      }
+    }
     setTitulo(saved.fields.titulo || '')
+    setTipoDocumento(saved.fields.tipoDocumento === 'COTACAO' ? 'COTACAO' : 'LISTA_PRECOS')
     setClienteBusca(saved.fields.clienteBusca || '')
     setClienteId(saved.fields.clienteId || '')
     setPrazoBusca(saved.fields.prazoBusca || '')
@@ -141,8 +160,8 @@ export function NovaCotacaoV2({
   }
   const draft = useCommercialDraft(
     draftKey(APP_ENV_LABEL, usuario.id, 'cotacao'),
-    { fields: { prazoEntrega, editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
-    Boolean(clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || filialId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
+    { fields: { filaProdutos: JSON.stringify(filaProdutos.map(p => ({ id: p.id, dados: filaRascunho[p.id] }))), tipoDocumento, prazoEntrega, editandoId, titulo, clienteBusca, clienteId, prazoBusca, prazoId, freteId, filialId, vendedorIdAdmin, moeda, observacoes, produtoBusca, quantidade, precoNet, entradaPreco, observacaoPreco, validade, precoFinal, faixa: faixa || '' }, items: itens, productId: produto?.id || null, idempotencyKey },
+    Boolean(filaProdutos.length || clienteId || clienteBusca || titulo || itens.length || produtoBusca || observacoes || quantidade || precoNet || prazoId || prazoBusca || freteId || filialId || vendedorIdAdmin || observacaoPreco || moeda !== 'USD' || precoFinal || validade !== dataIsoMaisDias(7)),
     !carregando, restaurarRascunho
   )
 
@@ -255,20 +274,21 @@ export function NovaCotacaoV2({
       .slice(0, 30)
   }, [prazos, prazoBusca])
 
+  async function selecionarCliente(id: string) {
+    setClienteId(id); setPrazoId(''); setPrazoBusca('')
+    const seq = ++prazoSeq.current
+    const { data, error } = await supabase.rpc('ultimo_prazo_cliente', { p_cliente_id: id })
+    if (seq !== prazoSeq.current) return
+    if (error) { setErro('Não foi possível recuperar o último prazo. Selecione o prazo de pagamento manualmente.'); return }
+    const prazo = prazos.find(p => p.id === data)
+    if (prazo) { setPrazoId(prazo.id); setPrazoBusca(prazo.descricao) }
+  }
+
   async function pesquisarProdutos(termo: string) {
     const seq = ++buscaSeq.current
     const safe = termo.replace(/[%(),]/g, ' ')
 
-    const { data, error } = await supabase
-      .from('produtos')
-      .select(`
-        id,codigo_protheus,nome,ncm,colour_index,grupo_tributario,status_fiscal,fiscal_pendencia,ativo,
-        precos(faixa_1,faixa_2,faixa_3,moeda)
-      `)
-      .eq('ativo', true)
-      .or(`nome.ilike.%${safe}%,codigo_protheus.ilike.%${safe}%,colour_index.ilike.%${safe}%`)
-      .order('nome')
-      .limit(30)
+    const { data, error } = await supabase.rpc('buscar_produtos_cotacao_estoque', { p_termo: safe })
 
     if (seq !== buscaSeq.current) return
     if (error) {
@@ -401,7 +421,7 @@ export function NovaCotacaoV2({
 
   async function adicionarItem() {
     if (adicionandoRef.current) return
-    if (!prazoEntrega.trim() || prazoEntrega.trim().length > 120) { setErro('Informe o prazo de entrega deste produto (até 120 caracteres).'); return }
+    if (tipoDocumento === 'COTACAO' && !(n(quantidade) > 0)) { setErro('Informe a quantidade do produto para a cotação.'); return }
     adicionandoRef.current = true
     setProcessandoItem(true)
 
@@ -493,7 +513,7 @@ export function NovaCotacaoV2({
   async function salvarCotacao(confirmar = false) {
     if (salvando || envioRef.current || edicaoRef.current || adicionandoRef.current) return
     if (confirmar && !revisando) return
-    if (produto || editandoId) { setErro('Adicione, salve ou cancele o produto em edição antes de revisar.'); return }
+    if (produto || editandoId || filaProdutos.length || selecionados.length) { setErro('Inclua ou remova os produtos em preenchimento antes de revisar.'); return }
 
     setErro('')
     setSucesso('')
@@ -505,7 +525,7 @@ export function NovaCotacaoV2({
     if (itens.some(item => item.filial_origem_id !== filialId)) return setErro('Há itens calculados para outra filial ou sem filial. Remova e adicione esses produtos novamente para revisar os preços.')
     const erroValidade = erroValidadeCotacao(validade)
     if (erroValidade) return setErro(erroValidade)
-    if (itens.some(item => !item.prazo_entrega?.trim())) return setErro('Edite os produtos e informe o prazo de entrega de cada um.')
+    if (tipoDocumento === 'COTACAO' && itens.some(item => !(Number(item.quantidade) > 0))) return setErro('Informe a quantidade de todos os produtos da cotação.')
     if (!prazoId) return setErro('Selecione o prazo de pagamento.')
     if (!freteId) return setErro('Selecione o tipo de frete: CIF ou FOB.')
     if (admin && clienteSelecionado?.vendedor_id == null && !vendedorIdAdmin) {
@@ -524,6 +544,7 @@ export function NovaCotacaoV2({
     }
 
     const cabecalho = {
+      tipo_documento: tipoDocumento,
       titulo: titulo.trim(),
       cliente_id: clienteId,
       filial_id: filialId,
@@ -624,7 +645,7 @@ export function NovaCotacaoV2({
     setFreteId('')
     setVendedorIdAdmin('')
     setObservacoes('')
-    setItens([])
+    setItens([]); setFilaProdutos([]); setFilaRascunho({}); setSelecionados([])
     setIdempotencyKey(crypto.randomUUID())
     selecionarProdutoVazio()
 
@@ -641,11 +662,12 @@ export function NovaCotacaoV2({
     )
   }
 
-  if (draft.pending) return <section className="page"><h1>Nova Cotação</h1><DraftNotice draft={draft} /></section>
+  if (draft.pending) return <section className="page"><h1>{tipoDocumento === 'COTACAO' ? 'Nova cotação' : 'Nova lista de preços'}</h1><DraftNotice draft={draft} /></section>
 
   if (revisando) return <RevisaoComercial
       tipo="cotação"
       campos={[
+        ['Tipo de documento', tipoDocumento === 'COTACAO' ? 'Cotação' : 'Lista de preços'],
         ['Título', titulo],
         ['Validade', validade.split('-').reverse().join('/')],
         ['Cliente', clienteSelecionado ? `${clienteSelecionado.codigo}${clienteSelecionado.loja ? ` / ${clienteSelecionado.loja}` : ''} — ${clienteSelecionado.razao_social}` : ''],
@@ -656,7 +678,7 @@ export function NovaCotacaoV2({
         ['Frete', fretes.find(f => f.id === freteId)?.descricao],
         ['Vendedor', vendedores.find(v => v.id === (vendedorIdAdmin || clienteSelecionado?.vendedor_id || usuario.vendedor_id))?.nome || (!admin ? usuario.nome : 'Conforme carteira do cliente')],
       ]}
-      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} salvando={salvando}
+      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} onErroLimpo={() => setErro('')} salvando={salvando}
       onEditar={() => { setRevisando(false); setErro('') }}
       onConfirmar={() => void salvarCotacao(true)}
     />
@@ -668,13 +690,13 @@ export function NovaCotacaoV2({
       <div className="page-header">
         <div>
           <span className="eyebrow">NOVA COTAÇÃO • {APP_ENV_LABEL}</span>
-          <h1>Nova Cotação</h1>
+          <h1>{tipoDocumento === 'COTACAO' ? 'Nova cotação' : 'Nova lista de preços'}</h1>
           <p>Monte a proposta com NET e final, validade, prazo de pagamento e frete.</p>
         </div>
         <div className="status-pill"><span className="status-dot" />Validação automática</div>
       </div>
 
-      {erro && <div className="alert error">{erro}</div>}
+      <ErroModal mensagem={erro} onFechar={() => setErro('')} />
       {sucesso && <div className="alert success">{sucesso}</div>}
       {avisoEmail && <div className="alert warning-box">{avisoEmail}</div>}
 
@@ -688,6 +710,7 @@ export function NovaCotacaoV2({
         </div>
 
         <div className="form-grid">
+          <label className="field">Tipo de documento *<select value={tipoDocumento} onChange={e => setTipoDocumento(e.target.value as typeof tipoDocumento)}><option value="COTACAO">Cotação</option><option value="LISTA_PRECOS">Lista de preços</option></select></label>
           <div className="field field-wide">
             <label>Título da cotação *</label>
             <input
@@ -702,10 +725,10 @@ export function NovaCotacaoV2({
             <label>Cliente *</label>
             <input
               value={clienteBusca}
-              disabled={itens.length > 0}
+              disabled={itens.length > 0 || filaProdutos.length > 0}
               onChange={(e) => {
                 setClienteBusca(e.target.value)
-                setClienteId('')
+                setClienteId(''); prazoSeq.current += 1; setPrazoId(''); setPrazoBusca('')
               }}
               placeholder={admin ? 'Pesquise qualquer cliente...' : 'Pesquise sua carteira...'}
             />
@@ -716,7 +739,7 @@ export function NovaCotacaoV2({
                     type="button"
                     key={c.id}
                     onClick={() => {
-                      setClienteId(c.id)
+                      void selecionarCliente(c.id)
                       setClienteBusca(`${c.codigo} — ${c.razao_social}`)
                       setVendedorIdAdmin('')
                     }}
@@ -737,7 +760,7 @@ export function NovaCotacaoV2({
 
           <div className="field">
             <label htmlFor="cotacao-filial">Filial de faturamento *</label>
-            <select id="cotacao-filial" value={filialId} disabled={salvando || adicionandoRef.current || (itens.length > 0 && Boolean(filialId))} onChange={e => {
+            <select id="cotacao-filial" value={filialId} disabled={salvando || adicionandoRef.current || ((itens.length > 0 || filaProdutos.length > 0) && Boolean(filialId))} onChange={e => {
               fiscalSeq.current += 1
               setCalculo(null)
               setFilialId(e.target.value)
@@ -766,6 +789,7 @@ export function NovaCotacaoV2({
             <input
               value={prazoBusca}
               onChange={(e) => {
+                prazoSeq.current += 1
                 setPrazoBusca(e.target.value)
                 setPrazoId('')
               }}
@@ -808,7 +832,7 @@ export function NovaCotacaoV2({
           <div className="field">
             <label>Moeda *</label>
             <select
-              disabled={itens.length > 0}
+              disabled={itens.length > 0 || filaProdutos.length > 0}
               value={moeda}
               onChange={(e) => setMoeda(e.target.value as Moeda)}
             >
@@ -837,7 +861,7 @@ export function NovaCotacaoV2({
           <span>2</span>
           <div>
             <strong>{editandoId ? 'Editar produto' : 'Adicionar produto'}</strong>
-            <small>A quantidade é opcional. O Colour Index fica visível junto ao produto.</small>
+            <small>Selecione produtos com estoque disponível ou importação a caminho. A quantidade é obrigatória para cotação e opcional para lista de preços.</small>
           </div>
         </div>
 
@@ -858,7 +882,8 @@ export function NovaCotacaoV2({
         {!!resultadosProduto.length && (
           <div className="product-results">
             {resultadosProduto.map((item) => (
-              <button type="button" key={item.id} onClick={() => selecionarProduto(item)}>
+              <button type="button" key={item.id} aria-pressed={selecionados.some(p => p.id === item.id)} onClick={() => setSelecionados(atual => atual.some(p => p.id === item.id) ? atual.filter(p => p.id !== item.id) : [...atual, item])}>
+                <span>{selecionados.some(p => p.id === item.id) ? '☑ Selecionado' : '☐ Selecionar'}</span>
                 <strong>{item.nome}</strong>
                 <span>
                   {item.codigo_protheus || 'SEM CÓDIGO'} • NCM {item.ncm || '—'} • Colour Index {item.colour_index || 'Não informado'}
@@ -868,12 +893,21 @@ export function NovaCotacaoV2({
           </div>
         )}
 
+        {selecionados.length > 0 && <button type="button" className="primary-button" onClick={() => {
+          if (!clienteId || !filialId) { setErro('Selecione o cliente e a filial antes de preencher os produtos.'); return }
+          setFilaProdutos(atual => [...atual, ...selecionados.filter(p => !atual.some(a => a.id === p.id))])
+          setSelecionados([]); setProdutoBusca(''); setResultadosProduto([])
+        }}>Preencher {selecionados.length} produto(s) selecionado(s)</button>}
+        {filaProdutos.map(p => <ProdutoCotacaoEditor key={p.id} produto={p} clienteId={clienteId} filialId={filialId} moeda={moeda} ptax={ptax}
+          quantidadeObrigatoria={tipoDocumento === 'COTACAO'} onErro={setErro} inicial={filaRascunho[p.id]} onRascunho={dados => setFilaRascunho(atual => ({ ...atual, [p.id]: dados }))}
+          onRemover={() => setFilaProdutos(atual => atual.filter(x => x.id !== p.id))}
+          onAdicionar={item => { setItens(atual => [...atual, item]); setFilaProdutos(atual => atual.filter(x => x.id !== p.id)) }} />)}
         {produto && (
           <div className="selected-product">
             <div className="selected-product-head">
               <div>
                 <span className="eyebrow">PRODUTO SELECIONADO</span>
-                <h3>{produto.nome}</h3>
+                <h3>{produto.nome}</h3><ChegadasProduto produtoId={produto.id} onErro={setErro} />
                 <p><b>Código:</b> {produto.codigo_protheus || 'SEM CÓDIGO'}</p>
                 <p><b>NCM:</b> {produto.ncm || 'Não informado'}</p>
                 <p><b>Colour Index:</b> {produto.colour_index || 'Não informado'}</p>
@@ -902,13 +936,13 @@ export function NovaCotacaoV2({
             )}
 
             <div className="field">
-              <label htmlFor="prazo-entrega-produto">Prazo de entrega do produto *</label>
-              <input id="prazo-entrega-produto" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)} maxLength={120} placeholder="Ex.: 10 dias úteis após a confirmação do pedido" />
-              <small>Informe a quantidade de dias, se são úteis ou corridos e a condição de início do prazo.</small>
+              <label htmlFor="prazo-entrega-produto">Entrega prevista (opcional)</label>
+              <input id="prazo-entrega-produto" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)} type="date" />
+
             </div>
             <div className="form-grid compact">
               <div className="field">
-                <label>Quantidade (opcional)</label>
+                <label>Quantidade {tipoDocumento === 'COTACAO' ? '*' : '(opcional)'}</label>
                 <input
                   type="number"
                   min="0"
@@ -1022,10 +1056,10 @@ export function NovaCotacaoV2({
               {itens.map((item) => (
                 <tr key={item.idLocal}>
                   <td>
-                    <strong>{item.produto}</strong>
+                    <strong>{item.produto}</strong><ChegadasProduto produtoId={item.produto_id} onErro={setErro} />
                     <small>{item.codigo || 'SEM CÓDIGO'} • NCM {item.ncm || 'Não informado'}</small>
                     <small>Colour Index: {item.colour_index || 'Não informado'}</small>
-                    <small>Prazo de entrega: {item.prazo_entrega || 'Informe ao editar o item'}</small>
+                    <small>Prazo de entrega: {item.prazo_entrega || 'Não informado'}</small>
                   </td>
                   <td>{item.quantidade == null ? '—' : item.quantidade.toLocaleString('pt-BR')}</td>
                   <td>{money(item.preco_net, moeda)}</td>
@@ -1080,3 +1114,4 @@ export function NovaCotacaoV2({
     </section>
   )
 }
+

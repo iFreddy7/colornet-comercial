@@ -1,13 +1,15 @@
+import { ErroModal } from './ErroModal'
 import { useEffect, useRef } from 'react'
 import type { ItemPedidoLocal, Moeda } from '../types'
 import { APP_ENV_LABEL } from '../lib/env'
 
-export function RevisaoComercial({ tipo, campos, itens, moeda, observacoes, erro, salvando, onEditar, onConfirmar }: {
+export function RevisaoComercial({ tipo, campos, itens, moeda, observacoes, erro, onErroLimpo, salvando, onEditar, onConfirmar }: {
   tipo: 'cotação' | 'pedido'
   campos: Array<[string, string | null | undefined]>
   itens: ItemPedidoLocal[]
   moeda: Moeda
   observacoes: string
+  onErroLimpo?: () => void
   erro: string
   salvando: boolean
   onEditar: () => void
@@ -25,7 +27,7 @@ export function RevisaoComercial({ tipo, campos, itens, moeda, observacoes, erro
       <h1 ref={heading} tabIndex={-1}>Revisar {tipo}</h1>
       <p>Confira os dados abaixo. Para corrigir, volte ao preenchimento. O envio acontece somente após a confirmação.</p>
     </div></div>
-    {erro && <div className="alert error" role="alert">{erro}</div>}
+    <ErroModal mensagem={erro} onFechar={onErroLimpo} />
     <div className="form-card">
       <h2>Dados comerciais</h2>
       <dl className="form-grid">
@@ -66,3 +68,4 @@ export function RevisaoComercial({ tipo, campos, itens, moeda, observacoes, erro
     </div>
   </section>
 }
+

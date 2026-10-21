@@ -1,3 +1,5 @@
+import { ChegadasProduto } from '../components/ChegadasProduto'
+import { ErroModal } from '../components/ErroModal'
 import { identificarFilial } from '../lib/filiaisFaturamento'
 import { temVisaoComercial } from '../lib/permissoes'
 import { carregarClientesComerciais } from '../lib/clientesComerciais'
@@ -1050,7 +1052,7 @@ export function NovoPedido({
         ['Frete', fretes.find(f => f.id === freteId)?.descricao],
         ['Vendedor', vendedores.find(v => v.id === (vendedorIdAdmin || clienteSelecionado?.vendedor_id || usuario.vendedor_id))?.nome || (!admin ? usuario.nome : 'Conforme carteira do cliente')],
       ]}
-      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} salvando={salvando}
+      itens={itens} moeda={moeda} observacoes={observacoes} erro={erro} onErroLimpo={() => setErro('')} salvando={salvando}
       onEditar={() => { setRevisando(false); setErro('') }}
       onConfirmar={() => void salvarPedido(true)}
     />
@@ -1074,7 +1076,7 @@ export function NovoPedido({
         </div>
       </div>
 
-      {erro && <div className="alert error">{erro}</div>}
+      <ErroModal mensagem={erro} onFechar={() => setErro('')} />
       {sucesso && <div className="alert success">{sucesso}</div>}
       {avisoEmail && <div className="alert warning-box">{avisoEmail}</div>}
 
@@ -1666,7 +1668,7 @@ export function NovoPedido({
               {itens.map((item) => (
                 <tr key={item.idLocal}>
                   <td>
-                    <strong>{item.produto}</strong>
+                    <strong>{item.produto}</strong><ChegadasProduto produtoId={item.produto_id} onErro={setErro} />
                     <small>{item.codigo || 'SEM CÓDIGO'} • {item.modo_fiscal}</small>
                     {cotacao && <small>NCM {item.ncm || 'Não informado'}{item.colour_index ? ` • Colour Index ${item.colour_index}` : ''}</small>}
                   </td>
@@ -1744,3 +1746,4 @@ export function NovoPedido({
     </section>
   )
 }
+

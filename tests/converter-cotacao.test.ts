@@ -24,6 +24,11 @@ await db.exec(await readFile(new URL('../supabase/migrations/20260925150446_exig
 await db.exec(await readFile(new URL('./fixtures/order-schema.sql',import.meta.url),'utf8'))
 await db.exec(await readFile(new URL('./fixtures/order-creation-before-approved-conversion.sql',import.meta.url),'utf8'))
 await db.exec(await readFile(new URL('../supabase/migrations/20260925162819_preservar_cotacao_aprovada_no_pedido.sql',import.meta.url),'utf8'))
+const updated = await readFile(new URL('../supabase/migrations/20261021135320_cotacao_lista_selecao_estoque.sql',import.meta.url),'utf8')
+for (const name of ['converter_cotacao_pedido_impl', 'criar_pedido_cotacao_impl']) {
+  const match = updated.match(new RegExp('CREATE OR REPLACE FUNCTION private\\.' + name + '\\([\\s\\S]*?\\$function\\$\\s*;'))
+  assert.ok(match); await db.exec(match[0])
+}
 await db.exec('create trigger fail_after_reservation before update on cotacoes for each row execute function public.fail_after_reservation()')
 await db.query('update usuarios set vendedor_id=$1',[id(11)])
 await db.query('insert into clientes values($1,true,$2)',[id(10),id(11)])
@@ -106,3 +111,18 @@ test('Helpers aprovados não são executáveis por clientes e pedidos comuns con
   const line=(await db.query<any>('select * from pedido_itens where pedido_id=$1',[normal.pedido_id])).rows[0]
   assert.equal(Number(line.preco_final),99.99);assert.equal(Number(line.ipi),0.15)
 })
+
+test('Seleção parcial preserva o preço da linha original e reserva somente o selecionado',async()=>{
+ await quote(80);await db.exec('reset role')
+ await db.query("update cotacoes set documento=jsonb_set(documento,'{itens}',(documento->'itens') || jsonb_build_array(jsonb_set(documento->'itens'->0,'{preco_final}','44.55'::jsonb))) where id=$1",[id(80)])
+ await actor()
+ const result=await convert(80,[{produto_id:id(8),quantidade:2,item_indice:1}] as any)
+ await db.exec('reset role')
+ const rows=(await db.query<any>('select quantidade,preco_final from pedido_itens where pedido_id=$1',[result.pedido_id])).rows
+ assert.equal(rows.length,1);assert.equal(Number(rows[0].quantidade),2);assert.equal(Number(rows[0].preco_final),44.55)
+})
+test('Conversão rejeita índices inexistentes e repetidos',async()=>{
+ await quote(81);await actor()
+ for(const itens of [[{produto_id:id(8),quantidade:1,item_indice:-1}],[{produto_id:id(8),quantidade:1,item_indice:99}],[{produto_id:id(8),quantidade:1,item_indice:0},{produto_id:id(8),quantidade:1,item_indice:0}]]) await assert.rejects(()=>convert(81,itens as any),/Seleção/)
+})
+
