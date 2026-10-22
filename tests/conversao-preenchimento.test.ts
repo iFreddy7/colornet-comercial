@@ -5,7 +5,7 @@ import { dadosIniciaisConversao, valoresAprovados, type CotacaoParaPedido } from
 const item = { produto_id: 'produto', produto: 'Produto', codigo: '001', quantidade: 2500, preco_net: 8.05, preco_final: 9.24, ipi: 0, filial_origem_id: 'sc' }
 const quote: CotacaoParaPedido = { id: 'cotacao', numero: 'COT', aprovacao_status: 'APROVADA', cliente_id: 'cliente', cliente_nome: 'Cliente', vendedor_nome: 'Vendedor', filial_id: null, moeda: 'USD', validade: '2099-12-31', prazo_pagamento_id: '28dias', frete_id: 'cif', observacoes: 'Entrega combinada', pedido_convertido_id: null, documento: { itens: [item] } }
 test('Conversão herda filial dos itens e todas as condições existentes da cotação', () => {
-  assert.deepEqual(dadosIniciaisConversao(quote, [{ id: 'sc' }]), { filialId: 'sc', prazoId: '28dias', freteId: 'cif', observacoes: 'Entrega combinada', quantidades: ['2500'], transportadora: '', dataEntrega: '', observacoesTransporte: '' })
+  assert.deepEqual(dadosIniciaisConversao(quote, [{ id: 'sc' }]), { filialId: 'sc', prazoId: '28dias', freteId: 'cif', observacoes: 'Entrega combinada', quantidades: ['2500'], selecionados: [true], transportadora: '', dataEntrega: '', observacoesTransporte: '' })
   const loaded = dadosIniciaisConversao({ ...quote, documento: { itens: [item], data_entrega: '2099-10-01', transportadora: 'Transportadora', observacoes_transporte: 'Agendar' } }, [{ id: 'sc' }])
   assert.equal(loaded.dataEntrega, '2099-10-01'); assert.equal(loaded.transportadora, 'Transportadora'); assert.equal(loaded.observacoesTransporte, 'Agendar')
 })
@@ -29,3 +29,4 @@ test('Proposta legada sem imposto conhecido não inventa IPI zero', () => {
   assert.equal(valoresAprovados({ ...item, ipi: undefined, fiscal: { ipi: 0.05 } }, '10').ipi, 0.05)
   assert.throws(() => valoresAprovados({ ...item, preco_final: NaN }, '10'), /preços e impostos/)
 })
+

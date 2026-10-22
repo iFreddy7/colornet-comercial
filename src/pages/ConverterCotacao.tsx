@@ -1,3 +1,4 @@
+import { ErroModal } from '../components/ErroModal'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { APP_ENV_LABEL, IS_PRODUCTION } from '../lib/env'
@@ -9,7 +10,7 @@ import { Loading } from '../components/Loading'
 import type { Filial, OpcaoCadastro, UsuarioApp } from '../types'
 
 type Fields = ReturnType<typeof dadosIniciaisConversao>
-const empty: Fields = { filialId: '', prazoId: '', freteId: '', observacoes: '', dataEntrega: '', transportadora: '', observacoesTransporte: '', quantidades: [] }
+const empty: Fields = { filialId: '', prazoId: '', freteId: '', observacoes: '', dataEntrega: '', transportadora: '', observacoesTransporte: '', quantidades: [], selecionados: [] }
 const money = (value: number, currency: string, digits = 2) => value.toLocaleString('pt-BR', { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 
@@ -31,7 +32,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   const sending = useRef(false)
   const signature = JSON.stringify(fields)
   const confirmado = confirmedSignature === signature
-  const { filialId, prazoId, freteId, quantidades, observacoes, dataEntrega, transportadora, observacoesTransporte } = fields
+  const { filialId, prazoId, freteId, quantidades, selecionados, observacoes, dataEntrega, transportadora, observacoesTransporte } = fields
   const setField = <K extends keyof Fields>(key: K, value: Fields[K]) => setFields(current => ({ ...current, [key]: value }))
 
   useEffect(() => {
@@ -72,20 +73,22 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   async function restore(data: CommercialDraft) {
     const values: unknown = JSON.parse(data.fields.quantidades || '[]')
     if (!Array.isArray(values) || values.length !== quote?.documento.itens.length || values.some(v => typeof v !== 'string')) throw new Error('Rascunho incompatível com esta cotação. Descarte-o para começar novamente.')
+    const selecao: unknown = data.fields.selecionados ? JSON.parse(data.fields.selecionados) : values.map(() => true)
+    if (!Array.isArray(selecao) || selecao.length !== values.length || selecao.some(v => typeof v !== 'boolean')) throw new Error('Seleção do rascunho inválida.')
     setFields({
       filialId: data.fields.filialId || initial.filialId, prazoId: data.fields.prazoId || initial.prazoId, freteId: data.fields.freteId || initial.freteId,
       observacoes: data.fields.observacoes ?? initial.observacoes, transportadora: data.fields.transportadora ?? initial.transportadora,
       dataEntrega: data.fields.dataEntrega ?? initial.dataEntrega, observacoesTransporte: data.fields.observacoesTransporte ?? initial.observacoesTransporte,
-      quantidades: values as string[],
+      quantidades: values as string[], selecionados: selecao as boolean[],
     })
     setConfirmedSignature('')
   }
   // Keep existing drafts; their old manual-price fields never override approved prices.
   const draft = useCommercialDraft(draftKey(APP_ENV_LABEL, usuario.id, `converter-${id}`), {
-    fields: { ...fields, quantidades: JSON.stringify(quantidades) }, items: [], productId: null, idempotencyKey: id,
+    fields: { ...fields, quantidades: JSON.stringify(quantidades), selecionados: JSON.stringify(selecionados) }, items: [], productId: null, idempotencyKey: id,
   }, Boolean(quote && signature !== JSON.stringify(initial)), !loading && Boolean(quote) && !quote?.pedido_convertido_id && quote?.aprovacao_status === 'APROVADA' && !sucesso, restore)
   const prices = quote?.documento.itens.map((item, index) => valoresAprovados(item, quantidades[index] || '')) || []
-  const valid = filiais.some(f => f.id === filialId) && prazos.some(p => p.id === prazoId) && fretes.some(f => f.id === freteId) && prices.length > 0 && prices.every(p => p.quantidadeValida)
+  const valid = filiais.some(f => f.id === filialId) && prazos.some(p => p.id === prazoId) && fretes.some(f => f.id === freteId) && selecionados.some(Boolean) && prices.every((p, index) => !selecionados[index] || p.quantidadeValida)
 
   async function confirmar() {
     if (!quote || !valid || !confirmado || sending.current) return
@@ -94,7 +97,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
       const { data, error } = await supabase.rpc('converter_cotacao_pedido', {
         p_cotacao_id: id,
         p_cabecalho: { cliente_id: quote.cliente_id, moeda: quote.moeda, filial_id: filialId, prazo_pagamento_id: prazoId, frete_id: freteId, observacoes, data_entrega: dataEntrega || null, transportadora: transportadora || null, observacoes_transporte: observacoesTransporte || null },
-        p_itens: quote.documento.itens.map((item, index) => ({ produto_id: item.produto_id, quantidade: Number(quantidades[index]) })),
+        p_itens: quote.documento.itens.map((item, index) => ({ produto_id: item.produto_id, quantidade: Number(quantidades[index]), item_indice: index })).filter((_, index) => selecionados[index]),
       })
       if (error) throw new Error(error.message)
       if (!data?.pedido_id) throw new Error('O servidor não confirmou o pedido. Tente novamente; a cotação só pode gerar um pedido.')
@@ -120,7 +123,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
     <div className="page-header"><div><span className="eyebrow">COTAÇÃO APROVADA</span><h1>Converter {quote.numero}</h1><p>{quote.cliente_nome} • {quote.moeda} • Validade: {quote.validade.split('-').reverse().join('/')}</p></div><button className="secondary-button" disabled={busy} onClick={onVoltar}>Voltar às cotações</button></div>
     <DraftNotice draft={draft} />
     <div className="alert success">Os dados da cotação já foram preenchidos. NET, preço final e IPI aprovados serão mantidos no pedido, sem recálculo de preços.</div>
-    {erro && <div className="alert error" role="alert">{erro}</div>}
+    <ErroModal mensagem={erro} onFechar={() => setErro('')} />
     <fieldset disabled={busy} className="form-card">
       <div className="form-grid">
         <label className="field">Cliente<input value={quote.cliente_nome} readOnly /></label>
@@ -133,16 +136,17 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
         <label className="field">Transportadora (opcional)<input value={transportadora} onChange={e => setField('transportadora', e.target.value)} /></label>
       </div>
       {!initial.filialId && <p>A proposta não identifica uma única filial ativa. Selecione a filial que irá faturar o pedido.</p>}
-      <div className="table-scroll"><table><thead><tr><th>Produto</th><th>Quantidade (KG)</th><th>NET aprovado</th><th>Final aprovado</th><th>IPI</th><th>Total com IPI</th><th>Saldo imediato</th></tr></thead><tbody>
-        {quote.documento.itens.map((item, index) => <tr key={`${item.produto_id}-${index}`}><td><strong>{item.produto}</strong><small>{item.codigo}</small></td><td><div className="field"><input aria-label={`Quantidade de ${item.produto}`} type="number" min="0.001" step="0.001" value={quantidades[index] || ''} onChange={e => setField('quantidades', quantidades.map((v, i) => i === index ? e.target.value : v))} /></div></td><td>{money(prices[index].net, quote.moeda)}</td><td>{money(prices[index].final, quote.moeda)}</td><td>{(prices[index].ipi * 100).toLocaleString('pt-BR')}%</td><td>{prices[index].quantidadeValida ? money(prices[index].total, quote.moeda) : 'Informe a quantidade'}</td><td>{saldos ? saldos[item.produto_id].toLocaleString('pt-BR') : !filialId ? 'Selecione a filial' : stockError ? 'Na confirmação' : 'Consultando...'}</td></tr>)}
+      <div className="table-scroll"><table><thead><tr><th>Incluir</th><th>Produto</th><th>Quantidade (KG)</th><th>NET aprovado</th><th>Final aprovado</th><th>IPI</th><th>Total com IPI</th><th>Saldo imediato</th></tr></thead><tbody>
+        {quote.documento.itens.map((item, index) => <tr key={`${item.produto_id}-${index}`}><td><input type="checkbox" aria-label={`Incluir ${item.produto} (${item.codigo})`} checked={selecionados[index] || false} onChange={e => setField('selecionados', selecionados.map((v, i) => i === index ? e.target.checked : v))} /></td><td><strong>{item.produto}</strong><small>{item.codigo}</small></td><td><div className="field"><input aria-label={`Quantidade de ${item.produto}`} disabled={!selecionados[index]} type="number" min="0.001" step="0.001" value={quantidades[index] || ''} onChange={e => setField('quantidades', quantidades.map((v, i) => i === index ? e.target.value : v))} /></div></td><td>{money(prices[index].net, quote.moeda)}</td><td>{money(prices[index].final, quote.moeda)}</td><td>{(prices[index].ipi * 100).toLocaleString('pt-BR')}%</td><td>{prices[index].quantidadeValida ? money(prices[index].total, quote.moeda) : 'Informe a quantidade'}</td><td>{saldos ? saldos[item.produto_id].toLocaleString('pt-BR') : !filialId ? 'Selecione a filial' : stockError ? 'Na confirmação' : 'Consultando...'}</td></tr>)}
       </tbody></table></div>
       <div className="form-grid"><label className="field">Observações<textarea value={observacoes} onChange={e => setField('observacoes', e.target.value)} /></label>
       <label className="field">Observações de transporte (opcional)<textarea value={observacoesTransporte} onChange={e => setField('observacoesTransporte', e.target.value)} /></label></div>
       {stockError && <p role="status">Não foi possível consultar o saldo agora. O estoque será conferido e reservado ao confirmar o pedido.</p>}
-      <p><strong>{prices.every(p => p.quantidadeValida) ? `Total com IPI: ${money(prices.reduce((sum, p) => sum + p.total, 0), quote.moeda)}` : 'Preencha as quantidades que não foram informadas na cotação.'}</strong></p>
-      <p>O estoque será reservado na confirmação. Quantidades sem saldo imediato seguem as regras de reserva futura do portal.</p>
+      <p><strong>{selecionados.some(Boolean) && prices.every((p, index) => !selecionados[index] || p.quantidadeValida) ? `Total com IPI: ${money(prices.reduce((sum, p, index) => sum + (selecionados[index] ? p.total : 0), 0), quote.moeda)}` : 'Selecione ao menos um produto e informe a quantidade dos itens selecionados.'}</strong></p>
+      <p>Somente os produtos marcados serão incluídos. A proposta continuará podendo gerar um único pedido.</p><p>O estoque será reservado na confirmação. Quantidades sem saldo imediato seguem as regras de reserva futura do portal.</p>
       <label className="switch-line"><input type="checkbox" checked={confirmado} onChange={e => setConfirmedSignature(e.target.checked ? signature : '')} />Revisei os dados do pedido e os valores da cotação aprovada.</label>
       <button className="primary-button submit-order" disabled={!valid || !confirmado || busy} onClick={confirmar}>{busy ? 'Processando...' : 'Confirmar e criar pedido'}</button>
     </fieldset>
   </section>
 }
+
