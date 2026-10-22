@@ -69,3 +69,12 @@
   .admin-users-table .admin-actions { display: grid; grid-template-columns: 1fr; }
   .forecast-filter-card .forecast-filters label { min-width: 0; }
 }
+/* Disponibilidade dos produtos durante o preenchimento comercial. */
+.product-arrivals { margin: 12px 0; padding: 12px; border: 1px solid #dbe4f2; border-radius: 10px; background: #f6f9ff; color: #334666; font-size: 12px; white-space: normal; }
+.product-arrivals > strong { color: #19337f; font-size: 12px; }
+.product-arrivals p { margin: 6px 0; }
+.product-arrivals ul { margin: 8px 0; padding-left: 18px; }
+.product-arrivals li { margin: 6px 0; overflow-wrap: anywhere; }
+.product-arrivals button { margin-top: 5px; font-size: 11px; padding: 5px 8px; }
+dialog::backdrop { background: rgb(16 30 58 / 45%); }
+

@@ -1,9 +1,11 @@
+import { descricaoEmbalagem } from './embalagens.ts'
 import { jsPDF } from 'jspdf'
 import { regular, bold } from './cotacaoFont.ts'
 import autoTable from 'jspdf-autotable'
 import { preencherFiliaisCotacao, type FilialFaturamento } from './filiaisFaturamento.ts'
 
 export interface DocumentoCotacao {
+ tipo_documento?: 'COTACAO' | 'LISTA_PRECOS';
  numero: string; titulo: string; created_at: string; moeda: 'USD' | 'BRL';
  cliente: {codigo: string; nome: string; cnpj_cpf?: string; municipio?: string; uf?: string};
  vendedor: {nome: string}; filial?: FilialFaturamento; filiais_faturamento?: FilialFaturamento[];
@@ -49,7 +51,7 @@ export function criarPdfCotacao(original: DocumentoCotacao) {
   doc.setFillColor(...colors.green);doc.rect(170,0,40,1.5,'F')
   doc.setFont('Colornet','bold');doc.setFontSize(21);doc.setTextColor(...colors.brand);doc.text('ColorNet',14,15)
   doc.setFont('Colornet','normal');doc.setFontSize(8);doc.setTextColor(...colors.muted);doc.text('PORTAL COMERCIAL',14,21)
-  doc.setFont('Colornet','bold');doc.setTextColor(...colors.brand);doc.setFontSize(10);doc.text('COTAÇÃO',196,13,{align:'right'})
+  doc.setFont('Colornet','bold');doc.setTextColor(...colors.brand);doc.setFontSize(10);doc.text(c.tipo_documento === 'LISTA_PRECOS' ? 'LISTA DE PREÇOS' : 'COTAÇÃO',196,13,{align:'right'})
   doc.setFont('Colornet','normal');doc.setFontSize(8);doc.setTextColor(...colors.muted);doc.text(c.numero,196,20,{align:'right'})
   doc.setDrawColor(...colors.line);doc.setLineWidth(.25);doc.line(14,25,196,25)
  }
@@ -108,7 +110,7 @@ export function criarPdfCotacao(original: DocumentoCotacao) {
  const temQuantidade=c.itens.some(i=>i.quantidade!=null)
  autoTable(doc,{...tablePage,startY:y,head:[['Produto',...(temQuantidade?['Qtd. (KG)']:[]),'Preço NET','Preço final¹','ICMS',...(temQuantidade?['Total²']:[])]],
  body:c.itens.map(i=>[
-  [i.produto,i.codigo||'Sem código',`NCM: ${i.ncm||'Não informado'}`,`Colour Index: ${i.colour_index||'Não informado'}`,i.prazo_entrega?`Prazo de entrega: ${i.prazo_entrega}`:'',i.ipi>0?`IPI: ${pct(i.ipi)}`:'',varios?`Faturamento: ${i.filial_faturamento?.nome||'A confirmar'}`:''].filter(Boolean).join('\n'),
+  [i.produto,descricaoEmbalagem(i.codigo),`Colour Index: ${i.colour_index||'Não informado'}`,i.ipi>0?`IPI: ${pct(i.ipi)}`:'',varios?`Faturamento: ${i.filial_faturamento?.nome||'A confirmar'}`:''].filter(Boolean).join('\n'),
   ...(temQuantidade?[i.quantidade==null?'-':i.quantidade.toLocaleString('pt-BR',{maximumFractionDigits:3})]:[]),
   i.preco_net==null?'-':money(i.preco_net),money(i.preco_final),icms(i.aliquota_icms),
   ...(temQuantidade?[i.total_item==null?'-':money(i.total_item)]:[])]),
@@ -141,3 +143,4 @@ export function pdfCotacaoBase64(c: DocumentoCotacao) {
  return {nome:nomePdfCotacao(c),base64:dataUri.slice(comma+1)}
 }
 export function baixarPdfCotacao(c: DocumentoCotacao) { criarPdfCotacao(c).save(nomePdfCotacao(c)) }
+

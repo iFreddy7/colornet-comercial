@@ -20,6 +20,7 @@ export function dadosIniciaisConversao(q: CotacaoParaPedido, filiais: Array<{ id
     prazoId: q.prazo_pagamento_id || '', freteId: q.frete_id || '', observacoes: q.observacoes || '',
     transportadora: q.documento.transportadora || '', dataEntrega: q.documento.data_entrega || '',
     observacoesTransporte: q.documento.observacoes_transporte || '',
+    selecionados: q.documento.itens.map(() => true),
     quantidades: q.documento.itens.map(i => i.quantidade == null ? '' : String(i.quantidade)),
   }
 }
@@ -36,3 +37,4 @@ export function valoresAprovados(item: ItemCotacaoAprovada, quantidade: string) 
   const valorIpi = Math.round((subtotal * ipi + Number.EPSILON) * 100) / 100
   return { net, final, ipi, quantidadeValida, total: Math.round((subtotal + valorIpi) * 100) / 100 }
 }
+
