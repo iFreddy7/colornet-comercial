@@ -1,0 +1,192 @@
+-- Approval is optional; explicit rejection and unknown states still block conversion.
+CREATE OR REPLACE FUNCTION private.criar_pedido_cotacao_impl(p_cabecalho jsonb, p_itens jsonb, p_cotacao_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  q public.cotacoes%rowtype; source_item jsonb; item_index integer := 0;
+  v_uid uuid := (select auth.uid());
+  v_usuario public.usuarios%rowtype;
+  v_cliente public.clientes%rowtype;
+  v_cliente_id uuid; v_filial_id uuid; v_vendedor_id uuid;
+  v_prazo uuid; v_frete uuid; v_numero text; v_pedido_id uuid;
+  v_item jsonb; v_produto_id uuid; v_quantidade numeric; v_preco_net numeric;
+  v_preco_final numeric; v_observacao_preco text; v_faixa text;
+  v_calc jsonb; v_auto boolean; v_aliquota numeric; v_divisor numeric; v_ipi numeric;
+  v_subtotal numeric; v_valor_ipi numeric; v_total_item numeric;
+  v_subtotal_pedido numeric:=0; v_ipi_pedido numeric:=0; v_total_pedido numeric:=0; v_qtd_itens integer:=0;
+begin
+  if v_uid is null then raise exception 'Sessão expirada ou usuário não autenticado.'; end if;
+  select * into v_usuario from public.usuarios where id=v_uid and ativo=true;
+  if not found then raise exception 'Usuário não possui perfil ativo.'; end if;
+  if p_cabecalho is null then raise exception 'Cabeçalho do pedido não informado.'; end if;
+  if p_itens is null or jsonb_typeof(p_itens)<>'array' or jsonb_array_length(p_itens)=0 then raise exception 'O pedido precisa possuir pelo menos um item.'; end if;
+  select * into q from public.cotacoes where id=p_cotacao_id for update;
+  if not found or (q.created_by<>v_uid and v_usuario.perfil not in ('ADMIN','GERENTE','DIRETOR'))
+     or coalesce(q.aprovacao_status, '') not in ('PENDENTE','APROVADA') or q.pedido_convertido_id is not null
+     or q.validade is null or q.validade < (now() at time zone 'America/Sao_Paulo')::date then
+    raise exception 'Cotação indisponível para conversão.';
+  end if;
+  if (p_cabecalho->>'cliente_id')::uuid is distinct from q.cliente_id
+     or p_cabecalho->>'moeda' is distinct from q.moeda then
+    raise exception 'Os dados devem corresponder à cotação registrada.';
+  end if;
+  v_cliente_id:=nullif(p_cabecalho->>'cliente_id','')::uuid;
+  v_filial_id:=nullif(p_cabecalho->>'filial_id','')::uuid;
+  v_prazo:=nullif(p_cabecalho->>'prazo_pagamento_id','')::uuid;
+  v_frete:=nullif(p_cabecalho->>'frete_id','')::uuid;
+  if v_cliente_id is null or v_filial_id is null then raise exception 'Cliente e filial são obrigatórios.'; end if;
+  select * into v_cliente from public.clientes where id=v_cliente_id and ativo=true;
+  if not found then raise exception 'Cliente não encontrado ou inativo.'; end if;
+  if v_usuario.perfil in ('ADMIN','GERENTE','DIRETOR') then
+    v_vendedor_id:=q.vendedor_id;
+    if v_vendedor_id is null then raise exception 'Cliente sem vendedor. Informe um vendedor para o pedido.'; end if;
+  else
+    if v_usuario.vendedor_id is null then raise exception 'Seu usuário não está vinculado a um vendedor.'; end if;
+    if v_cliente.vendedor_id is distinct from v_usuario.vendedor_id then raise exception 'Cliente fora da sua carteira.'; end if;
+    if q.vendedor_id is distinct from v_usuario.vendedor_id then raise exception 'Vendedor diferente da cotação.'; end if;
+    v_vendedor_id:=q.vendedor_id;
+  end if;
+  if not exists(select 1 from public.filiais f where f.id=v_filial_id and f.ativo=true) then raise exception 'Filial inválida.'; end if;
+  v_numero:=private.gerar_numero_pedido();
+  insert into public.pedidos(numero,created_by,vendedor_id,cliente_id,filial_id,moeda,prazo_pagamento_id,frete_id,transportadora,data_entrega,observacoes_transporte,observacoes,status)
+  values(v_numero,v_uid,v_vendedor_id,v_cliente_id,v_filial_id,
+    case when upper(coalesce(p_cabecalho->>'moeda','USD'))='BRL' then 'BRL' else 'USD' end,
+    v_prazo,v_frete,nullif(trim(p_cabecalho->>'transportadora'),''),nullif(p_cabecalho->>'data_entrega','')::date,
+    nullif(trim(p_cabecalho->>'observacoes_transporte'),''),nullif(trim(p_cabecalho->>'observacoes'),''),'ABERTO')
+  returning id into v_pedido_id;
+  for v_item in select value from jsonb_array_elements(p_itens) loop
+    v_produto_id:=nullif(v_item->>'produto_id','')::uuid;
+    v_quantidade:=nullif(v_item->>'quantidade','')::numeric;
+    source_item:=q.documento->'itens'->coalesce((v_item->>'item_indice')::integer,item_index);
+    if source_item is null then raise exception 'Item da cotação inexistente.'; end if;
+    item_index:=item_index+1;
+    if v_produto_id is distinct from (source_item->>'produto_id')::uuid then raise exception 'Os produtos devem corresponder à cotação.'; end if;
+    v_preco_net:=nullif(source_item->>'preco_net','')::numeric;
+    v_observacao_preco:=nullif(trim(source_item->>'observacao_preco'),'');
+    v_faixa:=coalesce(nullif(trim(source_item->>'faixa_interna'),''),nullif(trim(source_item->'fiscal'->>'faixa_interna'),''));
+    if v_produto_id is null or v_quantidade is null or v_quantidade<=0 or v_preco_net is null or v_preco_net<=0 then
+      raise exception 'Item inválido: produto, quantidade e preço NET são obrigatórios.';
+    end if;
+    -- Only the locked, approved database document supplies unit prices and taxes.
+    -- Browser values and current pricing rules cannot change an approved proposal.
+    v_calc:=coalesce(source_item->'fiscal','{}'::jsonb);
+    v_auto:=coalesce((v_calc->>'automatico')::boolean,false);
+    v_preco_final:=nullif(source_item->>'preco_final','')::numeric;
+    v_ipi:=coalesce(nullif(source_item->>'ipi','')::numeric,nullif(v_calc->>'ipi','')::numeric);
+    v_aliquota:=coalesce(nullif(source_item->>'aliquota_icms','')::numeric,nullif(v_calc->>'aliquota','')::numeric);
+    v_divisor:=nullif(v_calc->>'divisor','')::numeric;
+    if v_preco_net is null or not(v_preco_net>0 and v_preco_net<=1000000000)
+       or v_preco_final is null or not(v_preco_final>0 and v_preco_final<=1000000000)
+       or v_ipi is null or not(v_ipi>=0 and v_ipi<=1)
+       or (v_aliquota is not null and not(v_aliquota>=0 and v_aliquota<=1))
+       or (v_divisor is not null and not(v_divisor>0 and v_divisor<=1)) then
+      raise exception 'A cotação não possui preços e impostos válidos para conversão. Emita uma nova proposta.';
+    end if;
+    v_subtotal:=round(v_preco_final*v_quantidade,2);
+    v_valor_ipi:=round(v_subtotal*v_ipi,2);
+    v_total_item:=round(v_subtotal+v_valor_ipi,2);
+    insert into public.pedido_itens(pedido_id,produto_id,quantidade,preco_net,preco_final,aliquota_icms,divisor_icms,ipi,valor_ipi,subtotal,total_item,modo_fiscal,regra_icms,motivo_fiscal,faixa_interna,observacao_preco)
+    values(v_pedido_id,v_produto_id,v_quantidade,v_preco_net,v_preco_final,v_aliquota,v_divisor,v_ipi,v_valor_ipi,v_subtotal,v_total_item,
+      case when v_auto then 'AUTOMATICO' else 'MANUAL' end,nullif(v_calc->>'regra',''),case when v_auto then null else nullif(v_calc->>'motivo','') end,v_faixa,v_observacao_preco);
+    v_subtotal_pedido:=v_subtotal_pedido+v_subtotal;
+    v_ipi_pedido:=v_ipi_pedido+v_valor_ipi;
+    v_total_pedido:=v_total_pedido+v_total_item;
+    v_qtd_itens:=v_qtd_itens+1;
+  end loop;
+  update public.pedidos set subtotal=round(v_subtotal_pedido,2),valor_ipi=round(v_ipi_pedido,2),total=round(v_total_pedido,2) where id=v_pedido_id;
+  return jsonb_build_object('sucesso',true,'pedido_id',v_pedido_id,'numero',v_numero,'itens',v_qtd_itens,'subtotal',round(v_subtotal_pedido,2),'valor_ipi',round(v_ipi_pedido,2),'total',round(v_total_pedido,2));
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION private.converter_cotacao_pedido_impl(p_cotacao_id uuid, p_cabecalho jsonb, p_itens jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  u public.usuarios%rowtype;
+  q public.cotacoes%rowtype;
+  source_item jsonb; requested jsonb;
+  items jsonb := '[]'::jsonb; result jsonb; header jsonb;
+  branch_id uuid; quantity numeric; net numeric;
+  idx integer; source_idx integer; seen integer[] := ARRAY[]::integer[]; pid uuid;
+begin
+  select * into u from public.usuarios where id = (select auth.uid()) and ativo;
+  if not found then raise exception 'Usuário não autenticado ou inativo.'; end if;
+  select * into q from public.cotacoes where id = p_cotacao_id for update;
+  if not found or (q.created_by <> u.id and u.perfil not in ('ADMIN','GERENTE','DIRETOR')) then
+    raise exception 'Cotação não encontrada ou sem permissão.';
+  end if;
+  if q.pedido_convertido_id is not null then
+    return (select jsonb_build_object('sucesso',true,'pedido_id',p.id,'numero',p.numero,
+      'duplicado_bloqueado',true,'cotacao_numero',q.numero)
+      from public.pedidos p where p.id=q.pedido_convertido_id);
+  end if;
+  if coalesce(q.aprovacao_status, '') not in ('PENDENTE','APROVADA') then
+    raise exception 'Cotação reprovada ou com situação inválida. Emita uma nova proposta.';
+  end if;
+  if q.validade is null or q.validade < (now() at time zone 'America/Sao_Paulo')::date then
+    raise exception 'Cotação vencida ou sem validade. Emita uma nova proposta antes de converter.';
+  end if;
+  if jsonb_typeof(p_cabecalho) is distinct from 'object' then raise exception 'Informe os dados do pedido.'; end if;
+  if (p_cabecalho->>'cliente_id')::uuid is distinct from q.cliente_id
+     or p_cabecalho->>'moeda' is distinct from q.moeda then
+    raise exception 'Cliente e moeda devem corresponder à cotação.';
+  end if;
+  branch_id := nullif(p_cabecalho->>'filial_id','')::uuid;
+  if not exists(select 1 from public.filiais where id=branch_id and ativo) then raise exception 'Selecione uma filial ativa.'; end if;
+  if not exists(select 1 from public.prazos_pagamento where id=nullif(p_cabecalho->>'prazo_pagamento_id','')::uuid and ativo)
+     or not exists(select 1 from public.fretes where id=nullif(p_cabecalho->>'frete_id','')::uuid and ativo) then
+    raise exception 'Revise o prazo de pagamento e o frete.';
+  end if;
+  if jsonb_typeof(p_itens) is distinct from 'array' or jsonb_typeof(q.documento->'itens') is distinct from 'array' then
+    raise exception 'Itens inválidos.';
+  end if;
+  if jsonb_array_length(p_itens)=0 or jsonb_array_length(p_itens)>500 then
+    raise exception 'Revise todos os itens da cotação.';
+  end if;
+  -- The quote UUID is the server-owned idempotency key; never trust a new browser key.
+  if exists(select 1 from public.pedido_idempotencia where chave=q.id) then
+    raise exception 'Identificador já utilizado em outro pedido. Solicite revisão ao administrador.';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('COLORNET_ESTOQUE_GLOBAL',0));
+  for idx in 0..jsonb_array_length(p_itens)-1 loop
+    requested := p_itens->idx;
+    source_idx := coalesce((requested->>'item_indice')::integer,idx);
+    if source_idx<0 or source_idx>=jsonb_array_length(q.documento->'itens') or source_idx=any(seen) then raise exception 'Seleção de produtos inválida ou repetida.'; end if;
+    seen:=array_append(seen,source_idx);
+    source_item := q.documento->'itens'->source_idx;
+    if requested->>'produto_id' is distinct from source_item->>'produto_id' then raise exception 'Os produtos devem corresponder à cotação.'; end if;
+    if not exists(select 1 from public.produtos where id=(source_item->>'produto_id')::uuid and ativo) then raise exception 'Há produto inativo ou indisponível.'; end if;
+    quantity := nullif(requested->>'quantidade','')::numeric;
+    if quantity is distinct from round(quantity,3) then raise exception 'Informe quantidade com até três casas decimais.'; end if;
+    net := nullif(source_item->>'preco_net','')::numeric;
+    if quantity is null or not(quantity>0 and quantity<=1000000000)
+      or net is null or not(net>0 and net<=1000000000) then raise exception 'Informe quantidade e preço válidos em todos os itens.'; end if;
+    -- A browser still running the old review screen must not confirm different prices.
+    if requested->'calculo_confirmado' is not null and requested->'calculo_confirmado'<>'null'::jsonb
+       and ((requested->'calculo_confirmado'->>'preco_final')::numeric is distinct from (source_item->>'preco_final')::numeric
+         or (requested->'calculo_confirmado'->>'preco_net')::numeric is distinct from net
+         or (requested->'calculo_confirmado'->>'ipi')::numeric is distinct from coalesce((source_item->>'ipi')::numeric,(source_item->'fiscal'->>'ipi')::numeric)) then
+      raise exception 'Atualize a página para usar os preços da cotação registrada, sem recálculo.';
+    end if;
+    items := items || jsonb_build_array(jsonb_build_object('produto_id',source_item->>'produto_id',
+      'quantidade',quantity,'item_indice',source_idx));
+  end loop;
+  header := p_cabecalho || jsonb_build_object('cliente_id',q.cliente_id,'moeda',q.moeda,'vendedor_id',q.vendedor_id,
+    'observacoes',concat('Convertido da cotação ',q.numero,'. ',coalesce(p_cabecalho->>'observacoes','')));
+  result := private.criar_pedido_cotacao_v4_impl(header,items,q.id,q.id);
+  pid := nullif(result->>'pedido_id','')::uuid;
+  if pid is null or coalesce((result->>'duplicado_bloqueado')::boolean,false) then
+    raise exception 'Não foi possível vincular a cotação a um novo pedido.';
+  end if;
+  update public.cotacoes set pedido_convertido_id=pid,convertida_em=now() where id=q.id;
+  return result || jsonb_build_object('cotacao_numero',q.numero);
+end;
+$function$
+;
