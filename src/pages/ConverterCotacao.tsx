@@ -1,3 +1,4 @@
+import { permiteConversaoSemAprovacao } from '../lib/aprovacaoCotacao'
 import { ErroModal } from '../components/ErroModal'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -58,7 +59,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   useEffect(() => {
     let active = true
     setSaldos(null); setStockError(false)
-    if (!quote || !filialId || sucesso || quote.pedido_convertido_id || quote.aprovacao_status !== 'APROVADA') return
+    if (!quote || !filialId || sucesso || quote.pedido_convertido_id || !permiteConversaoSemAprovacao(quote.aprovacao_status)) return
     const products = [...new Set(quote.documento.itens.map(i => i.produto_id))]
     void Promise.all(products.map(async product => {
       const { data, error } = await supabase.rpc('consultar_disponibilidade_produto', { p_produto_id: product })
@@ -86,7 +87,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
   // Keep existing drafts; their old manual-price fields never override approved prices.
   const draft = useCommercialDraft(draftKey(APP_ENV_LABEL, usuario.id, `converter-${id}`), {
     fields: { ...fields, quantidades: JSON.stringify(quantidades), selecionados: JSON.stringify(selecionados) }, items: [], productId: null, idempotencyKey: id,
-  }, Boolean(quote && signature !== JSON.stringify(initial)), !loading && Boolean(quote) && !quote?.pedido_convertido_id && quote?.aprovacao_status === 'APROVADA' && !sucesso, restore)
+  }, Boolean(quote && signature !== JSON.stringify(initial)), !loading && Boolean(quote) && !quote?.pedido_convertido_id && permiteConversaoSemAprovacao(quote?.aprovacao_status || '') && !sucesso, restore)
   const prices = quote?.documento.itens.map((item, index) => valoresAprovados(item, quantidades[index] || '')) || []
   const valid = filiais.some(f => f.id === filialId) && prazos.some(p => p.id === prazoId) && fretes.some(f => f.id === freteId) && selecionados.some(Boolean) && prices.every((p, index) => !selecionados[index] || p.quantidadeValida)
 
@@ -113,16 +114,16 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
     finally { sending.current = false; setBusy(false) }
   }
 
-  if (loading) return <Loading texto="Carregando cotação aprovada..." />
+  if (loading) return <Loading texto="Carregando cotação registrada..." />
   if (!quote) return <section className="page"><div className="alert error">{erro}</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (quote.pedido_convertido_id || sucesso) return <section className="page"><h1>Conversão da cotação</h1><div className="alert success">{sucesso || 'Esta cotação já foi convertida. Consulte o pedido vinculado no histórico de Pedidos.'}</div>{aviso && <div className="alert warning-box">{aviso}</div>}<button className="primary-button" onClick={onVoltar}>Voltar às cotações</button></section>
-  if (quote.aprovacao_status !== 'APROVADA') return <section className="page"><div className="alert warning-box">Esta cotação precisa ser aprovada por Gerente ou Diretor antes de virar pedido. Consulte a avaliação nas cotações.</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
+  if (!permiteConversaoSemAprovacao(quote.aprovacao_status)) return <section className="page"><div className="alert warning-box">Esta cotação foi reprovada ou possui uma situação inválida. Consulte a avaliação e emita uma nova proposta.</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (!quote.validade || quote.validade < today()) return <section className="page"><div className="alert warning-box">Esta cotação venceu ou não possui validade. Emita uma nova proposta com as condições atualizadas.</div><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   if (draft.pending) return <section className="page"><h1>Converter {quote.numero}</h1><DraftNotice draft={draft} /><button className="secondary-button" onClick={onVoltar}>Voltar às cotações</button></section>
   return <section className="page">
-    <div className="page-header"><div><span className="eyebrow">COTAÇÃO APROVADA</span><h1>Converter {quote.numero}</h1><p>{quote.cliente_nome} • {quote.moeda} • Validade: {quote.validade.split('-').reverse().join('/')}</p></div><button className="secondary-button" disabled={busy} onClick={onVoltar}>Voltar às cotações</button></div>
+    <div className="page-header"><div><span className="eyebrow">CONVERSÃO DE COTAÇÃO</span><h1>Converter {quote.numero}</h1><p>{quote.cliente_nome} • {quote.moeda} • Validade: {quote.validade.split('-').reverse().join('/')}</p></div><button className="secondary-button" disabled={busy} onClick={onVoltar}>Voltar às cotações</button></div>
     <DraftNotice draft={draft} />
-    <div className="alert success">Os dados da cotação já foram preenchidos. NET, preço final e IPI aprovados serão mantidos no pedido, sem recálculo de preços.</div>
+    <div className="alert success">Os dados da cotação já foram preenchidos. NET, preço final e IPI registrados serão mantidos no pedido, sem recálculo de preços.</div>
     <ErroModal mensagem={erro} onFechar={() => setErro('')} />
     <fieldset disabled={busy} className="form-card">
       <div className="form-grid">
@@ -136,7 +137,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
         <label className="field">Transportadora (opcional)<input value={transportadora} onChange={e => setField('transportadora', e.target.value)} /></label>
       </div>
       {!initial.filialId && <p>A proposta não identifica uma única filial ativa. Selecione a filial que irá faturar o pedido.</p>}
-      <div className="table-scroll"><table><thead><tr><th>Incluir</th><th>Produto</th><th>Quantidade (KG)</th><th>NET aprovado</th><th>Final aprovado</th><th>IPI</th><th>Total com IPI</th><th>Saldo imediato</th></tr></thead><tbody>
+      <div className="table-scroll"><table><thead><tr><th>Incluir</th><th>Produto</th><th>Quantidade (KG)</th><th>NET da proposta</th><th>Final da proposta</th><th>IPI</th><th>Total com IPI</th><th>Saldo imediato</th></tr></thead><tbody>
         {quote.documento.itens.map((item, index) => <tr key={`${item.produto_id}-${index}`}><td><input type="checkbox" aria-label={`Incluir ${item.produto} (${item.codigo})`} checked={selecionados[index] || false} onChange={e => setField('selecionados', selecionados.map((v, i) => i === index ? e.target.checked : v))} /></td><td><strong>{item.produto}</strong><small>{item.codigo}</small></td><td><div className="field"><input aria-label={`Quantidade de ${item.produto}`} disabled={!selecionados[index]} type="number" min="0.001" step="0.001" value={quantidades[index] || ''} onChange={e => setField('quantidades', quantidades.map((v, i) => i === index ? e.target.value : v))} /></div></td><td>{money(prices[index].net, quote.moeda)}</td><td>{money(prices[index].final, quote.moeda)}</td><td>{(prices[index].ipi * 100).toLocaleString('pt-BR')}%</td><td>{prices[index].quantidadeValida ? money(prices[index].total, quote.moeda) : 'Informe a quantidade'}</td><td>{saldos ? saldos[item.produto_id].toLocaleString('pt-BR') : !filialId ? 'Selecione a filial' : stockError ? 'Na confirmação' : 'Consultando...'}</td></tr>)}
       </tbody></table></div>
       <div className="form-grid"><label className="field">Observações<textarea value={observacoes} onChange={e => setField('observacoes', e.target.value)} /></label>
@@ -144,7 +145,7 @@ export function ConverterCotacao({ id, usuario, onVoltar, onCriado }: { id: stri
       {stockError && <p role="status">Não foi possível consultar o saldo agora. O estoque será conferido e reservado ao confirmar o pedido.</p>}
       <p><strong>{selecionados.some(Boolean) && prices.every((p, index) => !selecionados[index] || p.quantidadeValida) ? `Total com IPI: ${money(prices.reduce((sum, p, index) => sum + (selecionados[index] ? p.total : 0), 0), quote.moeda)}` : 'Selecione ao menos um produto e informe a quantidade dos itens selecionados.'}</strong></p>
       <p>Somente os produtos marcados serão incluídos. A proposta continuará podendo gerar um único pedido.</p><p>O estoque será reservado na confirmação. Quantidades sem saldo imediato seguem as regras de reserva futura do portal.</p>
-      <label className="switch-line"><input type="checkbox" checked={confirmado} onChange={e => setConfirmedSignature(e.target.checked ? signature : '')} />Revisei os dados do pedido e os valores da cotação aprovada.</label>
+      <label className="switch-line"><input type="checkbox" checked={confirmado} onChange={e => setConfirmedSignature(e.target.checked ? signature : '')} />Revisei os dados do pedido e os valores da cotação registrada.</label>
       <button className="primary-button submit-order" disabled={!valid || !confirmado || busy} onClick={confirmar}>{busy ? 'Processando...' : 'Confirmar e criar pedido'}</button>
     </fieldset>
   </section>

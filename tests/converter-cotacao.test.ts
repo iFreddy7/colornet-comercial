@@ -29,6 +29,7 @@ for (const name of ['converter_cotacao_pedido_impl', 'criar_pedido_cotacao_impl'
   const match = updated.match(new RegExp('CREATE OR REPLACE FUNCTION private\\.' + name + '\\([\\s\\S]*?\\$function\\$\\s*;'))
   assert.ok(match); await db.exec(match[0])
 }
+await db.exec(await readFile(new URL('../supabase/migrations/20261030193533_cotacao_aprovacao_opcional.sql',import.meta.url),'utf8'))
 await db.exec('create trigger fail_after_reservation before update on cotacoes for each row execute function public.fail_after_reservation()')
 await db.query('update usuarios set vendedor_id=$1',[id(11)])
 await db.query('insert into clientes values($1,true,$2)',[id(10),id(11)])
@@ -39,12 +40,12 @@ async function actor(n=1,role='authenticated'){await db.exec('reset role');await
 async function quote(n:number,manual=false,days=7){await db.exec('reset role');await db.query("insert into cotacoes(id,numero,created_by,cliente_id,vendedor_id,moeda,validade,documento) values($1,'COT-TESTE',$2,$3,$4,'USD',current_date+$5::integer,$6)",[id(n),id(1),id(10),id(11),days,JSON.stringify({itens:[{produto_id:id(manual?9:8),preco_net:25.1234,preco_final:30.12,ipi:0.05,aliquota_icms:0.04,quantidade:null,observacao_preco:manual?'Aprovado na cotação':null,fiscal:{automatico:!manual,divisor:0.8712,regra:'COTAÇÃO'}}]})]);await actor()}
 async function convert(n:number,items:unknown[]=[item()],cab=header){return (await db.query<{r:any}>('select public.converter_cotacao_pedido($1,$2,$3) r',[id(n),JSON.stringify(cab),JSON.stringify(items)])).rows[0].r}
 test('Invocação autenticada funciona sem acesso ao schema privado e não altera a proposta',async()=>{await quote(20);const result=await convert(20);await db.exec('reset role');const q=(await db.query<any>('select * from cotacoes where id=$1',[id(20)])).rows[0];assert.equal(q.pedido_convertido_id,result.pedido_id);assert.equal(q.documento.itens[0].quantidade,null);const p=(await db.query<any>('select * from pedidos where id=$1',[result.pedido_id])).rows[0];const line=(await db.query<any>('select * from pedido_itens where pedido_id=$1',[p.id])).rows[0];assert.equal(Number(line.preco_net),25.1234);assert.equal(Number(line.preco_final),30.12);assert.equal(Number(line.ipi),0.05);assert.equal(Number(line.quantidade),25);assert.equal(Number(p.total),790.65)})
-test('Pendentes e reprovadas não geram pedido nem reserva, mesmo com chamada direta por Admin',async()=>{
+test('Reprovadas e estados desconhecidos não geram pedido nem reserva, mesmo por Admin',async()=>{
   await quote(28)
-  for(const status of ['PENDENTE','REPROVADA']) {
+  for(const status of ['REPROVADA','DESCONHECIDA']) {
     await db.exec('reset role');await db.query('update cotacoes set aprovacao_status=$1 where id=$2',[status,id(28)])
     const antes=(await db.query<any>('select count(*)::int n from pedidos')).rows[0].n
-    await actor(3);await assert.rejects(()=>convert(28),/precisa ser aprovada/)
+    await actor(3);await assert.rejects(()=>convert(28),/reprovada ou com situação inválida/)
     await db.exec('reset role');assert.equal((await db.query<any>('select count(*)::int n from pedidos')).rows[0].n,antes)
     assert.equal((await db.query<any>('select count(*)::int n from pedido_idempotencia where chave=$1',[id(28)])).rows[0].n,0)
   }
@@ -126,3 +127,16 @@ test('Conversão rejeita índices inexistentes e repetidos',async()=>{
  for(const itens of [[{produto_id:id(8),quantidade:1,item_indice:-1}],[{produto_id:id(8),quantidade:1,item_indice:99}],[{produto_id:id(8),quantidade:1,item_indice:0},{produto_id:id(8),quantidade:1,item_indice:0}]]) await assert.rejects(()=>convert(81,itens as any),/Seleção/)
 })
 
+
+test('Vendedor converte proposta pendente sem aprovação, preservando preços e avaliação',async()=>{
+  await quote(90); await db.exec('reset role'); await db.query("update cotacoes set aprovacao_status='PENDENTE' where id=$1",[id(90)]); await actor();
+  const result=await convert(90); assert.ok(result.pedido_id); await db.exec('reset role');
+  const q=(await db.query<any>('select * from cotacoes where id=$1',[id(90)])).rows[0]; assert.equal(q.aprovacao_status,'PENDENTE');
+  const line=(await db.query<any>('select * from pedido_itens where pedido_id=$1',[result.pedido_id])).rows[0]; assert.equal(Number(line.preco_net),25.1234); assert.equal(Number(line.preco_final),30.12);
+  await actor(); assert.equal((await convert(90)).pedido_id,result.pedido_id);
+})
+test('Proposta pendente continua protegida por titularidade e validade',async()=>{
+  await quote(91); await db.exec('reset role'); await db.query("update cotacoes set aprovacao_status='PENDENTE' where id=$1",[id(91)]); await actor(2);
+  await assert.rejects(()=>convert(91),/sem permissão/); await actor(); await db.exec('reset role');
+  await db.query("update cotacoes set validade=current_date-1 where id=$1",[id(91)]); await actor(); await assert.rejects(()=>convert(91),/vencida/);
+})

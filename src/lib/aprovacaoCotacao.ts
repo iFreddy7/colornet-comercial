@@ -1,7 +1,7 @@
 import type { UsuarioApp } from '../types'
 
 export type SituacaoCotacao = 'PENDENTE' | 'APROVADA' | 'REPROVADA'
-export const situacoesCotacao: Record<SituacaoCotacao, string> = { PENDENTE: 'Aguardando avaliação', APROVADA: 'Aprovada', REPROVADA: 'Reprovada' }
+export const situacoesCotacao: Record<SituacaoCotacao, string> = { PENDENTE: 'Sem avaliação (opcional)', APROVADA: 'Aprovada', REPROVADA: 'Reprovada' }
 export type Avaliacao = {
   id: string; numero: string; pedido_convertido_id: string | null
   aprovacao_status: SituacaoCotacao; aprovacao_nome: string | null
@@ -16,4 +16,8 @@ export const situacoesAviso: Record<string, string> = {
   ENVIADO: 'Aviso aceito pelo servidor de e-mail para todos os destinatários.',
   ERRO: 'Há destinatários pendentes. Tente enviar o aviso novamente.',
   INCERTO: 'O envio não foi confirmado. João deve conferir o recebimento antes de solicitar outra tentativa.',
+}
+
+export function permiteConversaoSemAprovacao(status: string): boolean {
+  return status === 'PENDENTE' || status === 'APROVADA'
 }
