@@ -1,5 +1,5 @@
 // Lightweight reader for Protheus client exports. Ignores formatting and unrelated columns.
-const columns=new Map(['A','B','C','E','F','G','H','I','J','L','M','U','Y','AA','AD','CY','DN'].map(c=>[c,[...c].reduce((n,x)=>n*26+x.charCodeAt(0)-64,0)-1]));
+const columns=new Map(['A','B','C','E','F','G','H','I','J','L','M','U','Y','AA','AB','AD','BN','CE','CG','CY','CZ','DN','DP','FF'].map(c=>[c,[...c].reduce((n,x)=>n*26+x.charCodeAt(0)-64,0)-1]));
 const decoder=new TextDecoder();
 function xml(s){return s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi,(_,v)=>v[0]==='#'?String.fromCodePoint(v[1].toLowerCase()==='x'?parseInt(v.slice(2),16):Number(v.slice(1))):({amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"})[v]);}
 function texts(s){return [...s.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map(m=>xml(m[1])).join('');}

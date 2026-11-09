@@ -10,7 +10,11 @@ Layout Protheus da planilha clientes 09.11.xlsx. Código na coluna B, loja na C 
 
 Vendedor vazio preserva a carteira de cliente existente. Novo cliente precisa de vendedor. Código de vendedor desconhecido/inativo bloqueia a importação. Ausência de cliente no arquivo não o exclui. Status Inativo desativa cadastro existente, sem apagar histórico.
 
-Atualiza nome, endereço, contato e carteira; não sobrescreve a configuração fiscal de clientes existentes. Novos clientes entram com cálculo fiscal manual até conferência. As colunas fiscais não devem ser inferidas apenas pelo nome do cliente.
+Atualiza nome, endereço, contato, carteira e os campos fiscais suportados pelo portal. A leitura fiscal usa CNPJ/CPF (A), Tipo (I), Estado (J), IE (AA), País (AB), SUFRAMA (BN), desconto SUFRAMA (CE), grupo de clientes (CG), município de Zona Franca (CZ) e indicador Contribuinte (FF). Complemento vem de DP. Os cabeçalhos fiscais são obrigatórios para impedir deslocamento de colunas.
+
+Por determinação do usuário em 09/11, `Cons.Final` é tratado como `Revendedor`, inclusive na atualização de clientes existentes. Não se aplica essa conversão às exportações. Contribuinte explicitamente `Nao` impede cálculo automático; indicador vazio utiliza presença de IE, conforme o critério já utilizado no cadastro comercial. CNPJ/CPF tem dígitos verificadores conferidos; IE é verificada quanto ao preenchimento/formato, sem consulta cadastral à SEFAZ.
+
+Cadastros com documento válido, UF nacional, IE, contribuinte e tipo reconhecido são habilitados automaticamente. Exportação, falta de IE, documento inválido, Zona Franca/SUFRAMA e tipos não reconhecidos permanecem manuais, com motivo registrado. Restrições manuais personalizadas preexistentes são preservadas. As validações do produto e da operação continuam no motor fiscal do portal.
 
 ## Segurança e operação
 
@@ -27,3 +31,5 @@ Parser: testes sintéticos para AD, zeros, duplicatas, conflitos, lojas distinta
 Aplicação inicial: 2 novos, 508 cadastros atualizados, 2 carteiras alteradas, 10 vínculos preservados por AD vazia. BERNARDI E SOUTO (53844444/0001) foi vinculado a Francisco (000014) por instrução explícita do usuário, pois AD estava vazia. Backup inicial: clientes-0911-validado.
 
 A função de ingestão foi baseada no código efetivamente publicado (v29), preservando correções de estoque/previsão que ainda não constavam no arquivo do repositório.
+
+Complemento fiscal: 43 cadastros ajustados; 1.107 habilitados e 46 manuais (31 exportação, 10 sem IE, 4 Zona Franca/SUFRAMA, 1 documento inválido). WECKERLE Mogi e BERNARDI E SOUTO testados com cálculo automático nas duas filiais ativas. Novos cadastros testados em transação revertida; seis testes do leitor/parser/regras fiscais aprovados. A mesma classificação é aplicada nas próximas importações.
