@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseClientes} from '../supabase/functions/ingest-email-xlsx/parser.mjs';
 import {readClientSheets} from '../supabase/functions/ingest-email-xlsx/xlsx-clientes.mjs';
+import {fiscalCliente,documentoValido} from '../supabase/functions/ingest-email-xlsx/fiscal.mjs';
 function sheet(seller='000014 - FRANCISCO') {
  const h=[];h[1]='Código';h[2]='Loja';h[29]='Vendedor';
+ for(const [i,v] of [[0,'CNPJ/CPF'],[8,'Tipo'],[9,'Estado'],[26,'Ins. Estad.'],[27,'Pais'],[65,'SUFRAMA'],[82,'Desc.p/Sufr.'],[84,'Grp.Clientes'],[103,'Cod. Mun. ZF'],[161,'Contribuinte']])h[i]=v;
  const r=[];r[1]='123';r[2]='1';r[4]='CLIENTE TESTE';r[29]=seller;r[117]='Ativo';
  return {name:'Clientes',rows:[h,r]};
 }
@@ -11,6 +13,16 @@ test('AD fornece código do vendedor; código e loja preservam zeros',()=>{
  const c=parseClientes([sheet()]).linhas[0];
  assert.equal(c.codigo,'000123');assert.equal(c.loja,'0001');assert.equal(c.vendedor_codigo,'000014');
  assert.equal(parseClientes([sheet('')]).linhas[0].vendedor_codigo,null);
+});
+test('fiscal usa revendedor, valida documento e mantém exceções manuais',()=>{
+ const r=[];r[0]='53.844.444/0001-70';r[8]='Cons.Final';r[9]='PR';r[26]='9115336263';r[27]='105';
+ let f=fiscalCliente(r);assert.equal(f.tipo_cliente,'Revendedor');assert.equal(f.consumidor_final,false);assert.equal(f.calculo_automatico,true);
+ r[161]='Nao';assert.equal(fiscalCliente(r).calculo_automatico,false);r[161]='';
+ r[65]='1234';assert.match(fiscalCliente(r).motivo_calculo_manual,/SUFRAMA/);r[65]='';
+ r[26]='';assert.match(fiscalCliente(r).motivo_calculo_manual,/SEM IE/);r[26]='9115336263';
+ r[9]='EX';assert.match(fiscalCliente(r).motivo_calculo_manual,/EXPORTAÇÃO/);r[9]='PR';
+ r[0]='53.844.444/0001-71';assert.equal(documentoValido(r[0]),false);assert.match(fiscalCliente(r).motivo_calculo_manual,/INVÁLIDO/);
+ assert.equal(documentoValido('00000000000000'),false);
 });
 test('abas repetidas não duplicam clientes; diferenças bloqueiam o arquivo',()=>{
  const a=sheet(),b=sheet();assert.equal(parseClientes([a,b]).duplicados_identicos,1);
